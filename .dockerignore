@@ -1,0 +1,24 @@
+# Dependencias locales (Crítico)
+node_modules/
+
+# Carpetas de compilación y caché
+dist/
+.angular/
+
+# Historial de control de versiones
+.git/
+.gitignore
+
+# Archivos de logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Configuraciones de IDEs y editores
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln

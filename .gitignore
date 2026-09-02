@@ -42,3 +42,10 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+# Logs de tu gestor de paquetes actual
+pnpm-debug.log*
+.pnpm-store/
+
+# Archivos de entorno locales (Por seguridad, si decides usar .env localmente)
+.env
+.env.*
