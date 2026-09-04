@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package*.json pnpm-lock.yaml ./
 
 # Instalamos dependencias (Ajustado para usar pnpm según tu proyecto)
-RUN npm install -g pnpm && pnpm install --no-frozen-lockfile
+RUN rm -f pnpm-lock.yaml && npm install -g pnpm && pnpm install
 
 # Copiamos el resto del código fuente
 COPY . .
