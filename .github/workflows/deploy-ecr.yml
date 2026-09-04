@@ -53,4 +53,4 @@ jobs:
               "sudo docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest",
               "sudo docker run -d -p 80:80 --name app-produccion $ECR_REGISTRY/$ECR_REPOSITORY:latest",
               "sudo docker image prune -a -f"
-            ]'
+            ]}'
