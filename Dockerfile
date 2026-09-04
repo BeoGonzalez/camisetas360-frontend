@@ -1,16 +1,17 @@
 # ==========================================
 # ETAPA 1: Construcción (Builder)
 # ==========================================
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 WORKDIR /app
 
-# Copiamos los archivos de manifiesto de dependencias (incluyendo el lockfile si existe)
-COPY package*.json pnpm-lock.yaml* ./
+# Habilitamos Corepack para usar el gestor pnpm nativo del proyecto
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Configuramos pnpm, desactivamos la verificación estricta e instalamos dependencias de forma segura
-RUN npm install -g pnpm && \
-    pnpm config set manage-package-manager-versions false && \
-    pnpm install --no-frozen-lockfile
+# Copiamos los manifiestos y el lockfile de pnpm
+COPY package.json pnpm-lock.yaml ./
+
+# Instalamos las dependencias permitiendo scripts nativos (esbuild, parcel, etc.)
+RUN pnpm install --no-frozen-lockfile --unsafe-perm=true
 
 # Copiamos el resto del código fuente
 COPY . .
@@ -23,14 +24,12 @@ RUN pnpm run build
 # ==========================================
 FROM nginx:alpine
 
-# Copiamos los archivos compilados desde la Etapa 1 hacia la carpeta pública de Nginx
+# Copiamos los archivos compilados hacia la carpeta pública de Nginx
 COPY --from=builder /app/dist/camisetas360-frontend/browser /usr/share/nginx/html
 
-# Copiamos nuestra configuración personalizada de Nginx
+# Copiamos la configuración personalizada de Nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Exponemos el puerto 80 para el tráfico web
 EXPOSE 80
 
-# Arrancamos Nginx en primer plano
 CMD ["nginx", "-g", "daemon off;"]
