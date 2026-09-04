@@ -46,11 +46,11 @@ jobs:
             --instance-ids "${{ secrets.EC2_FRONTEND_ID }}" \
             --document-name "AWS-RunShellScript" \
             --comment "Desplegar nueva imagen de frontend en EC2" \
-            --parameters commands=[ \
-              "aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY", \
-              "sudo docker stop app-produccion || true", \
-              "sudo docker rm app-produccion || true", \
-              "sudo docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest", \
-              "sudo docker run -d -p 80:80 --name app-produccion $ECR_REGISTRY/$ECR_REPOSITORY:latest", \
-              "sudo docker image prune -a -f" \
-            ]
+            --parameters '{"commands":[
+              "aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $ECR_REGISTRY",
+              "sudo docker stop app-produccion || true",
+              "sudo docker rm app-produccion || true",
+              "sudo docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest",
+              "sudo docker run -d -p 80:80 --name app-produccion $ECR_REGISTRY/$ECR_REPOSITORY:latest",
+              "sudo docker image prune -a -f"
+            ]'
