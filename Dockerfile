@@ -4,11 +4,13 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Copiamos primero los archivos de dependencias para aprovechar la caché de Docker
-COPY package*.json pnpm-lock.yaml ./
+# Copiamos los archivos de manifiesto de dependencias (incluyendo el lockfile si existe)
+COPY package*.json pnpm-lock.yaml* ./
 
-# Instalamos dependencias (Ajustado para usar pnpm según tu proyecto)
-RUN rm -f pnpm-lock.yaml && npm install -g pnpm && pnpm install
+# Configuramos pnpm, desactivamos la verificación estricta e instalamos dependencias de forma segura
+RUN npm install -g pnpm && \
+    pnpm config set manage-package-manager-versions false && \
+    pnpm install --no-frozen-lockfile
 
 # Copiamos el resto del código fuente
 COPY . .
@@ -22,13 +24,12 @@ RUN pnpm run build
 FROM nginx:alpine
 
 # Copiamos los archivos compilados desde la Etapa 1 hacia la carpeta pública de Nginx
-# Nota: En Angular 17+, la ruta de salida es dist/camisetas360-frontend/browser
 COPY --from=builder /app/dist/camisetas360-frontend/browser /usr/share/nginx/html
 
 # Copiamos nuestra configuración personalizada de Nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Exponemos el puerto 80 para que el NLB/ALB de AWS pueda conectarse
+# Exponemos el puerto 80 para el tráfico web
 EXPOSE 80
 
 # Arrancamos Nginx en primer plano
