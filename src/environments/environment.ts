@@ -22,7 +22,7 @@ export const environment = {
     clientId: 'd01187f9-5a24-42b4-bcdb-4a35742a1399',
     
     authority: 'https://login.microsoftonline.com/e5372bf0-c5e3-4286-887c-79069f209c1f',
-    redirectUri: 'http://44.200.56.103:4200/',
+    redirectUri: 'http://100.49.172.129/',
     
     scopes: ['api://d01187f9-5a24-42b4-bcdb-4a35742a1399/Backend.Access'],
   },
