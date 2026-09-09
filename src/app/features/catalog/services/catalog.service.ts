@@ -21,7 +21,7 @@ export class CatalogService {
    * GET /api/v1/catalogo/productos
    */
   getProducts(): Observable<Product[]> {
-    return this.http.get<Product[]>(`${this.apiUrl}/productos`);
+    return this.http.get<Product[]>(`${this.apiUrl}/products`);
   }
 
   /**
@@ -29,6 +29,6 @@ export class CatalogService {
    * GET /api/v1/catalogo/productos/:id
    */
   getProductById(id: string): Observable<Product> {
-    return this.http.get<Product>(`${this.apiUrl}/productos/${id}`);
+    return this.http.get<Product>(`${this.apiUrl}/products/${id}`);
   }
 }

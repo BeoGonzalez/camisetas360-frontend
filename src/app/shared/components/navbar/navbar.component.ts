@@ -23,7 +23,7 @@ import { CartService } from '../../../features/cart/services/cart.service';
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div class="flex h-16 items-center justify-between">
           <!-- Logo -->
-          <a routerLink="/catalogo" class="flex items-center gap-2.5">
+          <a routerLink="/catalog" class="flex items-center gap-2.5">
             <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-extrabold text-white shadow-lg shadow-blue-500/25">
               C3
             </div>
@@ -34,7 +34,7 @@ import { CartService } from '../../../features/cart/services/cart.service';
 
           <!-- Desktop Navigation -->
           <div class="hidden items-center gap-1 md:flex">
-            <a routerLink="/catalogo"
+            <a routerLink="/catalog"
                routerLinkActive="bg-white/10 text-white"
                [routerLinkActiveOptions]="{ exact: false }"
                class="rounded-lg px-4 py-2 text-sm font-medium text-slate-300 transition-all duration-200 hover:bg-white/10 hover:text-white">
@@ -106,7 +106,7 @@ import { CartService } from '../../../features/cart/services/cart.service';
       @if (mobileMenuOpen()) {
         <div class="border-t border-white/10 bg-slate-900/98 backdrop-blur-xl md:hidden animate-slide-down">
           <div class="space-y-1 px-4 py-4">
-            <a routerLink="/catalogo"
+            <a routerLink="/catalog"
                routerLinkActive="bg-white/10 text-white"
                (click)="closeMobileMenu()"
                class="block rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white">

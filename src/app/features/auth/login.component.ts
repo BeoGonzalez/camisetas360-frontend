@@ -28,9 +28,27 @@ import { AuthService } from './services/auth.service';
 
           <!-- Body -->
           <div class="px-8 py-8">
-            <p class="mb-6 text-center text-sm text-slate-500">
-              Inicia sesión con tu cuenta de Microsoft para acceder al carrito de compras y tu perfil.
-            </p>
+            @if (authService.isLoggedIn()) {
+              <div class="text-center">
+                <div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                  <span class="text-xl font-bold">{{ authService.userInitials() }}</span>
+                </div>
+                <h2 class="text-lg font-semibold text-slate-800">¡Hola, {{ authService.activeUser() }}!</h2>
+                <p class="mt-2 mb-6 text-sm text-slate-500">Ya has iniciado sesión correctamente.</p>
+                
+                <button
+                  (click)="logout()"
+                  class="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-6 py-3 text-sm font-semibold text-red-600 shadow-sm transition-all hover:bg-red-100 hover:text-red-700 active:scale-[0.98]">
+                  <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Cerrar sesión
+                </button>
+              </div>
+            } @else {
+              <p class="mb-6 text-center text-sm text-slate-500">
+                Inicia sesión con tu cuenta de Microsoft para acceder al carrito de compras y tu perfil.
+              </p>
 
             <!-- Botón Microsoft -->
             <button
@@ -67,6 +85,7 @@ import { AuthService } from './services/auth.service';
                 </div>
               </div>
             </div>
+            }
           </div>
         </div>
 
@@ -79,10 +98,15 @@ import { AuthService } from './services/auth.service';
   `,
 })
 export class LoginComponent {
-  constructor(private readonly authService: AuthService) {}
+  constructor(public readonly authService: AuthService) {}
 
   /** Inicia el flujo de login con Azure Entra ID */
   login(): void {
     this.authService.login();
+  }
+
+  /** Cierra la sesión */
+  logout(): void {
+    this.authService.logout();
   }
 }

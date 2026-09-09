@@ -190,13 +190,15 @@ export class CatalogComponent implements OnInit {
     this.loading.set(true);
     this.error.set('');
 
+    console.log('[CatalogComponent] Iniciando petición a getProducts()...');
     this.catalogService.getProducts().subscribe({
       next: (data) => {
+        console.log('[CatalogComponent] Petición exitosa. Datos:', data);
         this.products.set(data);
         this.loading.set(false);
       },
       error: (err) => {
-        console.error('Error al cargar catálogo:', err);
+        console.error('[CatalogComponent] Error al cargar catálogo:', err);
         this.error.set('No se pudieron cargar los productos. Verifica tu conexión.');
         this.loading.set(false);
       },
