@@ -36,7 +36,7 @@ RUN apk add --no-cache openssl && \
     openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
     -keyout /etc/ssl/private/nginx-selfsigned.key \
     -out /etc/ssl/certs/nginx-selfsigned.crt \
-    -subj "/C=US/ST=State/L=City/O=Organization/CN=44.200.56.103"
+    -subj "/C=US/ST=State/L=City/O=Organization/CN=100.49.172.129"
 
 EXPOSE 443
 
