@@ -24,7 +24,7 @@ export const environment = {
     authority: 'https://login.microsoftonline.com/e5372bf0-c5e3-4286-887c-79069f209c1f',
     
     // URL de redirección en la instancia web pública (con HTTPS Auto-firmado)
-    redirectUri: 'https://44.200.56.103/',
+    redirectUri: 'https://100.49.172.129/',
     
     scopes: ['api://d01187f9-5a24-42b4-bcdb-4a35742a1399/Backend.Access'],
   },
