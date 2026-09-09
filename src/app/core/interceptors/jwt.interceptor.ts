@@ -18,8 +18,10 @@ import { from, switchMap, catchError, of } from 'rxjs';
 export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
   const msalService = inject(MsalService);
 
+  console.log('[JwtInterceptor] Interceptando petición a:', req.url);
   // Solo interceptar peticiones dirigidas al API Gateway
   if (!req.url.startsWith(environment.apiGateway)) {
+    console.log('[JwtInterceptor] URL no es del API Gateway. Pasando petición original.');
     return next(req);
   }
 
@@ -27,8 +29,11 @@ export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
 
   // Si no hay cuenta activa, dejar pasar sin token
   if (!activeAccount) {
+    console.log('[JwtInterceptor] No hay cuenta activa. Pasando petición original sin token.');
     return next(req);
   }
+
+  console.log('[JwtInterceptor] Cuenta activa detectada. Solicitando token...');
 
   // Adquirir token silenciosamente y adjuntarlo al request
   return from(
@@ -38,6 +43,7 @@ export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
     })
   ).pipe(
     switchMap((tokenResponse) => {
+      console.log('[JwtInterceptor] Token adquirido exitosamente.');
       const clonedReq = req.clone({
         setHeaders: {
           Authorization: `Bearer ${tokenResponse.accessToken}`,

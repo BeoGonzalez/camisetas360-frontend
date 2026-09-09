@@ -1,4 +1,4 @@
-import { ApplicationConfig } from '@angular/core';
+import { ApplicationConfig, APP_INITIALIZER } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
 import {
@@ -71,6 +71,20 @@ export function MSALInterceptorConfigFactory(): MsalInterceptorConfiguration {
 }
 
 /**
+ * Factory para inicializar MSAL v3.
+ * Requiere llamar a initialize() y handleRedirectPromise() antes de usar la aplicación.
+ */
+export function MSALInitializerFactory(msalService: MsalService) {
+  return async () => {
+    await msalService.instance.initialize();
+    const res = await msalService.instance.handleRedirectPromise();
+    if (res?.account) {
+      msalService.instance.setActiveAccount(res.account);
+    }
+  };
+}
+
+/**
  * Configuración principal de la aplicación Angular.
  *
  * Combina el interceptor JWT funcional (para inyectar Bearer Token)
@@ -95,6 +109,12 @@ export const appConfig: ApplicationConfig = {
     {
       provide: MSAL_INTERCEPTOR_CONFIG,
       useFactory: MSALInterceptorConfigFactory,
+    },
+    {
+      provide: APP_INITIALIZER,
+      useFactory: MSALInitializerFactory,
+      deps: [MsalService],
+      multi: true,
     },
     MsalService,
     MsalGuard,

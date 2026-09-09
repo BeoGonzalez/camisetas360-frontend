@@ -8,20 +8,22 @@ export const environment = {
   production: false,
 
   /** URL base del API Gateway (AWS) */
-  apiGateway: 'https://tu-api-gateway.execute-api.us-east-1.amazonaws.com',
+  apiGateway: 'https://nkkc0jiwzk.execute-api.us-east-1.amazonaws.com',
 
   /** Endpoints por microservicio (relativos al apiGateway) */
   endpoints: {
-    catalog: '/api/v1/catalogo',
+    catalog: '/api/v1/catalog',
     cart: '/api/v1/carrito',
     auth: '/api/v1/auth',
   },
 
   /** Configuración de Azure Entra ID (OAuth2) */
   azure: {
-    clientId: 'TU_CLIENT_ID',
-    authority: 'https://login.microsoftonline.com/TU_TENANT_ID',
-    redirectUri: 'http://localhost:4200/',
-    scopes: ['api://TU_CLIENT_ID/Cart.Write', 'User.Read'],
+    clientId: 'd01187f9-5a24-42b4-bcdb-4a35742a1399',
+    
+    authority: 'https://login.microsoftonline.com/e5372bf0-c5e3-4286-887c-79069f209c1f',
+    redirectUri: 'http://44.200.56.103:4200/',
+    
+    scopes: ['api://d01187f9-5a24-42b4-bcdb-4a35742a1399/Backend.Access'],
   },
 };

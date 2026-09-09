@@ -9,7 +9,7 @@ import { authGuard } from './core/guards/auth.guard';
  */
 export const routes: Routes = [
   {
-    path: 'catalogo',
+    path: 'catalog',
     loadChildren: () =>
       import('./features/catalog/catalog.routes').then((m) => m.CATALOG_ROUTES),
   },
@@ -30,6 +30,6 @@ export const routes: Routes = [
       import('./features/profile/profile.routes').then((m) => m.PROFILE_ROUTES),
     canActivate: [authGuard],
   },
-  { path: '', redirectTo: 'catalogo', pathMatch: 'full' },
-  { path: '**', redirectTo: 'catalogo' },
+  { path: '', redirectTo: 'catalog', pathMatch: 'full' },
+  { path: '**', redirectTo: 'catalog' },
 ];

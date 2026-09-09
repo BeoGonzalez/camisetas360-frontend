@@ -40,21 +40,9 @@ export class AuthService {
     private readonly msalService: MsalService,
     private readonly http: HttpClient
   ) {
-    // Procesar la respuesta de redirección al inicializar
-    this.handleRedirect();
-  }
-
-  /**
-   * Procesa la respuesta de redirección de MSAL y actualiza el estado.
-   * Debe ejecutarse una vez al iniciar la aplicación.
-   */
-  handleRedirect(): void {
-    this.msalService.instance.handleRedirectPromise().then((res) => {
-      if (res?.account) {
-        this.msalService.instance.setActiveAccount(res.account);
-      }
-      this.checkAccount();
-    });
+    // La inicialización y redirección de MSAL ya fue procesada por el APP_INITIALIZER.
+    // Solo verificamos si hay una cuenta activa.
+    this.checkAccount();
   }
 
   /** Verifica si hay una cuenta activa y actualiza los Signals */
@@ -71,12 +59,12 @@ export class AuthService {
 
   /** Inicia el flujo de login con redirección a Azure Entra ID */
   login(): void {
-    this.msalService.loginRedirect();
+    this.msalService.loginRedirect().subscribe();
   }
 
   /** Cierra la sesión y redirige al usuario */
   logout(): void {
-    this.msalService.logoutRedirect();
+    this.msalService.logoutRedirect().subscribe();
   }
 
   /**
