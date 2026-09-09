@@ -26,6 +26,6 @@ export const environment = {
     // URL de redirección en la instancia web pública (con HTTPS Auto-firmado)
     redirectUri: 'https://100.49.172.129/',
     
-    scopes: ['api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Backend.Access'],
+    scopes: ['api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Autenticacion.Microsoft'],
   },
 };
