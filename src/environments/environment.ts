@@ -19,11 +19,11 @@ export const environment = {
 
   /** Configuración de Azure Entra ID (OAuth2) */
   azure: {
-    clientId: 'd01187f9-5a24-42b4-bcdb-4a35742a1399',
+    clientId: '719c999d-0f57-4ad5-9bd9-a72be5ca07e0',
     
     authority: 'https://login.microsoftonline.com/e5372bf0-c5e3-4286-887c-79069f209c1f',
     redirectUri: 'http://100.49.172.129/',
     
-    scopes: ['api://d01187f9-5a24-42b4-bcdb-4a35742a1399/Backend.Access'],
+    scopes: ['api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Backend.Access'],
   },
 };
