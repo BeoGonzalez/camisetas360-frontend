@@ -1,3 +1,112 @@
-/* You can add global styles to this file, and also import other style files */
+/* ============================================================
+   Camisetas360 — Global Styles
+   Tailwind CSS v4 + Custom Theme + Animations
+   ============================================================ */
 
 @import 'tailwindcss';
+
+/* -------- Custom Theme (Tailwind v4 @theme) -------- */
+@theme {
+  /* Tipografía */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Animaciones personalizadas */
+  --animate-fade-in: fade-in 0.4s ease-out;
+  --animate-slide-up: slide-up 0.4s ease-out;
+  --animate-slide-down: slide-down 0.3s ease-out;
+  --animate-cart-badge: cart-badge 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* -------- Keyframes -------- */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cart-badge {
+  0% {
+    transform: scale(0);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* -------- Base Styles -------- */
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #f8fafc; /* slate-50 */
+  color: #1e293b; /* slate-800 */
+  min-height: 100vh;
+}
+
+/* -------- Selection -------- */
+::selection {
+  background-color: #3b82f6; /* blue-500 */
+  color: #ffffff;
+}
+
+/* -------- Scrollbar (Webkit) -------- */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9; /* slate-100 */
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1; /* slate-300 */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8; /* slate-400 */
+}
+
+/* -------- Focus Styles -------- */
+*:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* -------- Router Outlet Animation -------- */
+router-outlet + * {
+  animation: fade-in 0.3s ease-out;
+}

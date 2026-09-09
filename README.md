@@ -1,59 +1,82 @@
-# Camisetas360Frontend
+# Camisetas360 — Frontend
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.1.6.
+Frontend de e-commerce para **Camisetas360**, construido con **Angular 22** (Standalone Components), **Tailwind CSS 4** y autenticación corporativa con **Azure Entra ID (MSAL)**.
 
-## Development server
+## Arquitectura
 
-To start a local development server, run:
-
-```bash
-ng serve
+```
+src/app/
+├── core/               # Modelos, interceptor JWT, auth guard
+│   ├── guards/         # authGuard (funcional)
+│   ├── interceptors/   # jwtInterceptor (funcional)
+│   └── models/         # Product, CartItem, UserProfile
+├── features/           # Feature modules (lazy loaded)
+│   ├── auth/           # Login + AuthService
+│   ├── cart/           # Carrito + CartService (Signals)
+│   ├── catalog/        # Catálogo + CatalogService
+│   └── profile/        # Perfil protegido
+└── shared/             # Navbar, Footer (componentes reutilizables)
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+## Requisitos Previos
 
-## Code scaffolding
+- **Node.js** >= 22.x
+- **pnpm** >= 10.x (gestor de paquetes)
+- **Angular CLI** >= 22.x
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+## Instalación
 
 ```bash
-ng generate --help
+# Clonar el repositorio
+git clone https://github.com/BeoGonzalez/camisetas360-frontend.git
+cd camisetas360-frontend
+
+# Instalar dependencias
+pnpm install
 ```
 
-## Building
+## Configuración
 
-To build the project run:
+Editar `src/environments/environment.ts` con tus credenciales:
+
+```typescript
+export const environment = {
+  production: false,
+  apiGateway: 'https://TU-API-GATEWAY.execute-api.us-east-1.amazonaws.com',
+  azure: {
+    clientId: 'TU_CLIENT_ID',
+    authority: 'https://login.microsoftonline.com/TU_TENANT_ID',
+    redirectUri: 'http://localhost:4200/',
+    scopes: ['api://TU_CLIENT_ID/Cart.Write', 'User.Read'],
+  },
+};
+```
+
+## Desarrollo Local
 
 ```bash
-ng build
+# Iniciar servidor de desarrollo
+pnpm start
+# → http://localhost:4200
+
+# Build de producción
+pnpm run build
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+## Tecnologías Clave
 
-## Running unit tests
+| Tecnología | Uso |
+|---|---|
+| Angular 22 | Framework, Standalone Components, Signals |
+| Tailwind CSS 4 | Estilos responsive y diseño premium |
+| MSAL Angular | Autenticación OAuth2 con Azure Entra ID |
+| RxJS | Comunicación HTTP reactiva |
+| Angular Signals | Estado reactivo del carrito |
 
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
+## Endpoints Consumidos
 
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+| Servicio | Endpoint | Protegido |
+|---|---|---|
+| Catálogo | `GET /api/v1/catalogo/productos` | No |
+| Carrito | `POST /api/v1/carrito/checkout` | Sí (JWT) |
+| Perfil | `GET /api/v1/auth/profile` | Sí (JWT) |
