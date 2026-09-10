@@ -16,11 +16,15 @@ import { from, switchMap, catchError, of } from 'rxjs';
  *    (el backend responderá 401 y el flujo de login se activará).
  */
 export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
+  const catalogUrl = environment.apiGateway + environment.endpoints.catalog + '/products';
+  if (req.method === 'GET' && req.url.split('?')[0] === catalogUrl) {
+    return next(req.clone({ headers: req.headers.delete('Authorization') }));
+  }
   const msalService = inject(MsalService);
 
   console.log('[JwtInterceptor] Interceptando petición a:', req.url);
   // Solo interceptar peticiones dirigidas al API Gateway
-  if (!req.url.startsWith(environment.apiGateway)) {
+  if (!req.url.startsWith(environment.apiGateway + "/")) {
     console.log('[JwtInterceptor] URL no es del API Gateway. Pasando petición original.');
     return next(req);
   }
@@ -42,7 +46,10 @@ export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
       account: activeAccount,
     })
   ).pipe(
+    // Recuperar solo errores de token, sin repetir peticiones HTTP fallidas.
+    catchError(() => of(null)),
     switchMap((tokenResponse) => {
+      if (!tokenResponse) return next(req);
       console.log('[JwtInterceptor] Token adquirido exitosamente.');
       const clonedReq = req.clone({
         setHeaders: {
@@ -50,12 +57,6 @@ export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
         },
       });
       return next(clonedReq);
-    }),
-    catchError(() => {
-      // Si la adquisición silenciosa falla, enviar la petición original
-      // El backend responderá 401 y el guard/MSAL manejará el re-login
-      console.warn('[JwtInterceptor] No se pudo adquirir token silencioso');
-      return next(req);
     })
   );
 };

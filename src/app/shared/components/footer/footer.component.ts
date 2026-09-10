@@ -34,7 +34,7 @@ import { RouterLink } from '@angular/router';
             <h4 class="text-sm font-semibold uppercase tracking-wider text-slate-400">Navegación</h4>
             <ul class="mt-3 space-y-2">
               <li>
-                <a routerLink="/catalogo" class="text-sm text-slate-600 transition hover:text-blue-600">Catálogo</a>
+                <a routerLink="/catalog" class="text-sm text-slate-600 transition hover:text-blue-600">Catálogo</a>
               </li>
               <li>
                 <a routerLink="/carrito" class="text-sm text-slate-600 transition hover:text-blue-600">Carrito</a>

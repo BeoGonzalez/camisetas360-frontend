@@ -6,6 +6,9 @@ export interface CartItem {
   /** Identificador del producto asociado */
   productId: string;
 
+  name: string;
+  price: number;
+
   /** Código SKU del producto */
   sku: string;
 

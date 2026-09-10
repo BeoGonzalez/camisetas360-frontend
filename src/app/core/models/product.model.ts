@@ -1,20 +1,10 @@
-export interface ProductDTO {
-  id: string;
-  nombre: string;
-  precio: number;
-  descripcion: string;
-  stock: number;
-  imagen: string;
-}
-
+/** Contrato del endpoint público GET /api/v1/catalog/products. */
 export interface Product {
-  id: string;
   sku: string;
-  equipo: string;
-  liga: string;
-  temporada: string;
-  precio: number;
+  name: string;
+  category: string;
+  price: number;
   stock: number;
-  imagenUrl: string;
-  tallas: string[];
+  description: string;
 }
+export type ProductDTO = Product;
