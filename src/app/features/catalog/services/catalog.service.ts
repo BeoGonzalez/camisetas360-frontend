@@ -8,7 +8,7 @@ import { Product } from '../../../core/models/product.model';
  * Servicio dedicado al consumo del microservicio de catálogo.
  *
  * Todas las peticiones apuntan al API Gateway configurado en environment.ts
- * y el interceptor JWT se encarga de inyectar el token automáticamente.
+ * La lista de productos es pública y no requiere token.
  */
 @Injectable({ providedIn: 'root' })
 export class CatalogService {
@@ -18,7 +18,7 @@ export class CatalogService {
 
   /**
    * Obtiene la lista completa de productos del catálogo.
-   * GET /api/v1/catalogo/productos
+   * GET /api/v1/catalog/products
    */
   getProducts(): Observable<Product[]> {
     return this.http.get<Product[]>(`${this.apiUrl}/products`);
@@ -26,7 +26,7 @@ export class CatalogService {
 
   /**
    * Obtiene un producto específico por su ID.
-   * GET /api/v1/catalogo/productos/:id
+   * GET /api/v1/catalog/products/:id
    */
   getProductById(id: string): Observable<Product> {
     return this.http.get<Product>(`${this.apiUrl}/products/${id}`);

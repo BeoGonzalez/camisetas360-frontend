@@ -8,7 +8,7 @@ export const environment = {
   production: true,
 
   /** URL base del API Gateway de producción (AWS) */
-  apiGateway: 'https://nkkc0jiwzk.execute-api.us-east-1.amazonaws.com',
+  apiGateway: 'https://4ohe7l86rh.execute-api.us-east-1.amazonaws.com',
 
   /** Endpoints por microservicio (relativos al apiGateway) */
   endpoints: {

@@ -59,7 +59,12 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
  * Cualquier petición al API Gateway recibirá automáticamente el token.
  */
 export function MSALInterceptorConfigFactory(): MsalInterceptorConfiguration {
-  const protectedResourceMap = new Map<string, Array<string>>();
+  const protectedResourceMap = new Map<string, Array<string> | null>();
+  // Debe preceder al comodín del gateway: catálogo público.
+  protectedResourceMap.set(
+    `${environment.apiGateway}${environment.endpoints.catalog}/products`,
+    null
+  );
   protectedResourceMap.set(
     environment.apiGateway + '/*',
     environment.azure.scopes

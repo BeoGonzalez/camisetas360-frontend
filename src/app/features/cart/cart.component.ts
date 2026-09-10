@@ -36,7 +36,7 @@ import { CartItem } from '../../core/models/cart-item.model';
                   <!-- Image -->
                   <div class="h-24 w-24 flex-shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-slate-100 to-slate-200">
                     @if (item.imagenUrl) {
-                      <img [src]="item.imagenUrl" [alt]="item.equipo" class="h-full w-full object-cover" />
+                      <img [src]="item.imagenUrl" [alt]="item.name" class="h-full w-full object-cover" />
                     } @else {
                       <div class="flex h-full items-center justify-center">
                         <svg class="h-8 w-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
@@ -49,8 +49,8 @@ import { CartItem } from '../../core/models/cart-item.model';
                   <!-- Details -->
                   <div class="flex flex-1 flex-col justify-between">
                     <div>
-                      <h3 class="font-bold text-slate-800">{{ item.equipo }}</h3>
-                      <p class="text-sm text-slate-500">SKU: {{ item.sku }} · Talla: {{ item.talla }}</p>
+                      <h3 class="font-bold text-slate-800">{{ item.name }}</h3>
+                      <p class="text-sm text-slate-500">SKU: {{ item.sku }} @if (item.talla) { · Talla: {{ item.talla }} }</p>
                     </div>
                     <div class="mt-2 flex items-center justify-between">
                       <!-- Quantity Controls -->
@@ -75,7 +75,7 @@ import { CartItem } from '../../core/models/cart-item.model';
                       <!-- Price + Remove -->
                       <div class="flex items-center gap-4">
                         <span class="text-lg font-extrabold text-slate-800">
-                          {{ item.unitPrice * item.quantity | number:'1.0-0' }}
+                          {{ item.unitPrice * item.quantity | number:'1.2-2' }}
                           <span class="text-xs font-medium text-slate-400">COP</span>
                         </span>
                         <button
@@ -93,7 +93,7 @@ import { CartItem } from '../../core/models/cart-item.model';
             </div>
 
             <!-- Continue Shopping -->
-            <a routerLink="/catalogo" class="mt-4 inline-flex items-center gap-2 text-sm font-medium text-blue-600 transition hover:text-blue-700">
+            <a routerLink="/catalog" class="mt-4 inline-flex items-center gap-2 text-sm font-medium text-blue-600 transition hover:text-blue-700">
               <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
@@ -109,7 +109,7 @@ import { CartItem } from '../../core/models/cart-item.model';
               <div class="mt-5 space-y-3">
                 <div class="flex justify-between text-sm text-slate-600">
                   <span>Subtotal ({{ cartService.itemCount() }} ítems)</span>
-                  <span class="font-medium">{{ cartService.total() | number:'1.0-0' }} COP</span>
+                  <span class="font-medium">{{ cartService.total() | number:'1.2-2' }} COP</span>
                 </div>
                 <div class="flex justify-between text-sm text-slate-600">
                   <span>Envío</span>
@@ -118,7 +118,7 @@ import { CartItem } from '../../core/models/cart-item.model';
                 <div class="border-t border-slate-200 pt-3">
                   <div class="flex justify-between">
                     <span class="text-lg font-bold text-slate-800">Total</span>
-                    <span class="text-xl font-extrabold text-blue-600">{{ cartService.total() | number:'1.0-0' }} COP</span>
+                    <span class="text-xl font-extrabold text-blue-600">{{ cartService.total() | number:'1.2-2' }} COP</span>
                   </div>
                 </div>
               </div>
@@ -156,7 +156,7 @@ import { CartItem } from '../../core/models/cart-item.model';
           </div>
           <h3 class="text-xl font-bold text-slate-700">Tu carrito está vacío</h3>
           <p class="mt-2 text-slate-500">Explora nuestro catálogo y encuentra tu camiseta ideal.</p>
-          <a routerLink="/catalogo" class="mt-6 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-bold text-white transition hover:bg-blue-600">
+          <a routerLink="/catalog" class="mt-6 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-sm font-bold text-white transition hover:bg-blue-600">
             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>

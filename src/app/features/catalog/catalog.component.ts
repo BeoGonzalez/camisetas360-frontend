@@ -1,4 +1,5 @@
-import { Component, OnInit, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { CatalogService } from './services/catalog.service';
 import { CartService } from '../cart/services/cart.service';
@@ -9,9 +10,9 @@ import { Product } from '../../core/models/product.model';
  *
  * Muestra los productos en un grid responsivo de tarjetas con:
  * - Skeleton loaders durante la carga
- * - Selector de talla integrado
+ * - Datos del contrato público del catálogo
  * - Animaciones de hover (scale + shadow)
- * - Badge de liga y temporada
+ * - Categoría, descripción y stock
  * - Botón "Añadir al carrito" con feedback visual
  */
 @Component({
@@ -27,7 +28,7 @@ import { Product } from '../../core/models/product.model';
         </div>
         <div class="relative z-10">
           <h1 class="text-4xl font-extrabold tracking-tight md:text-5xl">Catálogo de Camisetas</h1>
-          <p class="mt-3 text-lg text-blue-200/80">Equipos de las 5 grandes ligas — Temporada Actual</p>
+          <p class="mt-3 text-lg text-blue-200/80">Explora las camisetas disponibles en nuestro catálogo</p>
         </div>
       </div>
     </section>
@@ -68,27 +69,15 @@ import { Product } from '../../core/models/product.model';
     <!-- Product Grid -->
     @if (!loading() && !error()) {
       <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        @for (product of products(); track product.id) {
+        @for (product of products(); track product.sku) {
           <div class="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
             <!-- Image -->
             <div class="relative h-56 overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200">
-              @if (product.imagenUrl) {
-                <img
-                  [src]="product.imagenUrl"
-                  [alt]="product.equipo"
-                  class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                />
-              } @else {
-                <div class="flex h-full items-center justify-center">
-                  <svg class="h-16 w-16 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                  </svg>
-                </div>
-              }
+              <div class="flex h-full items-center justify-center text-sm text-slate-500" role="img" aria-label="Imagen temporal: fotografía no disponible">Imagen no disponible</div>
 
-              <!-- Liga Badge -->
+              <!-- Categoría -->
               <span class="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur-sm">
-                {{ product.liga }}
+                {{ product.category }}
               </span>
 
               <!-- Stock Badge -->
@@ -101,43 +90,29 @@ import { Product } from '../../core/models/product.model';
 
             <!-- Content -->
             <div class="p-5">
-              <h3 class="text-lg font-bold text-slate-800">{{ product.equipo }}</h3>
-              <p class="mt-0.5 text-sm text-slate-500">{{ product.temporada }}</p>
+              <h3 class="text-lg font-bold text-slate-800">{{ product.name }}</h3>
+              <p class="mt-0.5 text-sm text-slate-500">{{ product.description }}</p>
 
               <div class="mt-3 flex items-baseline gap-1">
-                <span class="text-2xl font-extrabold text-blue-600">{{ product.precio | number:'1.0-0' }}</span>
+                <span class="text-2xl font-extrabold text-blue-600">{{ product.price | number:'1.2-2' }}</span>
                 <span class="text-sm font-medium text-slate-400">COP</span>
               </div>
 
-              <!-- Selector de Talla -->
-              <div class="mt-4">
-                <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Talla</p>
-                <div class="flex flex-wrap gap-2">
-                  @for (talla of product.tallas; track talla) {
-                    <button
-                      (click)="selectSize(product.id, talla)"
-                      [class]="selectedSizes()[product.id] === talla
-                        ? 'border-blue-600 bg-blue-600 text-white'
-                        : 'border-slate-300 bg-white text-slate-700 hover:border-blue-400'"
-                      class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all duration-200">
-                      {{ talla }}
-                    </button>
-                  }
-                </div>
-              </div>
+              <p class="mt-3 text-sm text-slate-500">SKU: {{ product.sku }} · Stock: {{ product.stock }}</p>
+              <p class="mt-1 text-xs text-slate-500">Tallas no informadas por el catálogo.</p>
 
               <!-- Botón Agregar -->
               <button
                 (click)="addToCart(product)"
-                [disabled]="!selectedSizes()[product.id]"
-                [class]="!selectedSizes()[product.id]
+                [disabled]="product.stock <= 0"
+                [class]="product.stock <= 0
                   ? 'cursor-not-allowed bg-slate-200 text-slate-400'
                   : 'bg-slate-900 text-white hover:bg-blue-600 active:scale-[0.97]'"
                 class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all duration-200">
                 <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
                 </svg>
-                Añadir al Carrito
+                {{ product.stock <= 0 ? 'Agotado' : addedProductId() === product.sku ? 'Añadido al carrito' : 'Añadir al Carrito' }}
               </button>
             </div>
           </div>
@@ -167,14 +142,14 @@ export class CatalogComponent implements OnInit {
   /** Mensaje de error si falla la carga */
   readonly error = signal<string>('');
 
-  /** Tallas seleccionadas por producto (map productId → talla) */
-  readonly selectedSizes = signal<Record<string, string>>({});
 
   /** Array para generar skeleton loaders */
-  readonly skeletons = Array.from({ length: 8 });
+  readonly skeletons = Array.from({ length: 8 }, (_, index) => index);
 
   /** Señal temporal para el feedback de "añadido" */
   readonly addedProductId = signal<string>('');
+
+  private readonly destroyRef = inject(DestroyRef);
 
   constructor(
     private readonly catalogService: CatalogService,
@@ -190,38 +165,26 @@ export class CatalogComponent implements OnInit {
     this.loading.set(true);
     this.error.set('');
 
-    console.log('[CatalogComponent] Iniciando petición a getProducts()...');
-    this.catalogService.getProducts().subscribe({
+    this.catalogService.getProducts().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (data) => {
-        console.log('[CatalogComponent] Petición exitosa. Datos:', data);
         this.products.set(data);
         this.loading.set(false);
       },
       error: (err) => {
         console.error('[CatalogComponent] Error al cargar catálogo:', err);
-        this.error.set('No se pudieron cargar los productos. Verifica tu conexión.');
+        this.error.set('No se pudieron cargar los productos. Revisa la conexión y la configuración CORS del servidor.');
         this.loading.set(false);
       },
     });
   }
 
-  /** Selecciona una talla para un producto específico */
-  selectSize(productId: string, talla: string): void {
-    this.selectedSizes.set({
-      ...this.selectedSizes(),
-      [productId]: talla,
-    });
-  }
-
-  /** Agrega un producto al carrito con la talla seleccionada */
+  /** El backend no informa tallas: se agrega por SKU. */
   addToCart(product: Product): void {
-    const talla = this.selectedSizes()[product.id];
-    if (!talla) return;
-
-    this.cartService.addToCart(product, talla);
+    if (product.stock <= 0) return;
+    this.cartService.addToCart(product, '');
 
     // Feedback visual temporal
-    this.addedProductId.set(product.id);
+    this.addedProductId.set(product.sku);
     setTimeout(() => this.addedProductId.set(''), 1500);
   }
 }

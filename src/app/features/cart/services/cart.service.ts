@@ -41,9 +41,10 @@ export class CartService {
    * Si el producto ya existe con la misma talla, incrementa la cantidad.
    */
   addToCart(product: Product, talla: string, quantity: number = 1): void {
+    if (product.stock <= 0 || !Number.isInteger(quantity) || quantity <= 0) return;
     const currentItems = this._items();
     const existingIndex = currentItems.findIndex(
-      (item) => item.productId === product.id && item.talla === talla
+      (item) => item.productId === product.sku && item.talla === talla
     );
 
     if (existingIndex >= 0) {
@@ -57,12 +58,14 @@ export class CartService {
     } else {
       // Agregar nuevo ítem
       const newItem: CartItem = {
-        productId: product.id,
+        productId: product.sku,
         sku: product.sku,
-        equipo: product.equipo,
+        name: product.name,
+        price: product.price,
+        equipo: product.name,
         quantity,
-        unitPrice: product.precio,
-        imagenUrl: product.imagenUrl,
+        unitPrice: product.price,
+        imagenUrl: '',
         talla,
       };
       this._items.set([...currentItems, newItem]);
@@ -80,6 +83,7 @@ export class CartService {
 
   /** Actualiza la cantidad de un ítem específico */
   updateQuantity(productId: string, talla: string, quantity: number): void {
+    if (!Number.isInteger(quantity)) return;
     if (quantity <= 0) {
       this.removeFromCart(productId, talla);
       return;
