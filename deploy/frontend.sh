@@ -4,12 +4,19 @@ set -euo pipefail
 registry=${1:?Falta registro ECR}
 image=${2:?Falta imagen ECR}
 cert_dir=/etc/letsencrypt/live/100.49.172.129
-test -s "$cert_dir/fullchain.pem"
-test -s "$cert_dir/privkey.pem"
-test -d /var/www/certbot
+fail() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+for dependency in openssl aws docker curl; do
+    command -v "$dependency" >/dev/null 2>&1 || fail "Falta instalar $dependency en la instancia EC2."
+done
+test -s "$cert_dir/fullchain.pem" || fail "Falta $cert_dir/fullchain.pem. Completar la emisión TLS según docs/aws-publication.md."
+test -s "$cert_dir/privkey.pem" || fail "Falta $cert_dir/privkey.pem. Completar la emisión TLS según docs/aws-publication.md."
+test -d /var/www/certbot || fail "Falta /var/www/certbot. Completar la configuración ACME según docs/aws-publication.md."
 # Fallar antes de detener la versión actual si el certificado no sirve.
-openssl x509 -in "$cert_dir/fullchain.pem" -checkend 86400 -noout
-openssl x509 -in "$cert_dir/fullchain.pem" -checkip 100.49.172.129 -noout
+openssl x509 -in "$cert_dir/fullchain.pem" -checkend 86400 -noout || fail "El certificado no es válido por al menos 24 horas; revisar la renovación."
+openssl x509 -in "$cert_dir/fullchain.pem" -checkip 100.49.172.129 -noout || fail "El certificado no corresponde a la IP 100.49.172.129."
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin "$registry"
 docker pull "$image"
 mounts=(-v /etc/letsencrypt:/etc/letsencrypt:ro -v /var/www/certbot:/var/www/certbot:ro)
