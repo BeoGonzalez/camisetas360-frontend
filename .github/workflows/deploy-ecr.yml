@@ -9,6 +9,10 @@ env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: camisetas360-frontend
 
+concurrency:
+  group: deploy-frontend-ec2
+  cancel-in-progress: false
+
 jobs:
   build-and-deploy:
     name: Build, Push and Deploy

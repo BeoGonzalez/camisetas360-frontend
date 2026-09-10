@@ -22,20 +22,45 @@ docker pull "$image"
 mounts=(-v /etc/letsencrypt:/etc/letsencrypt:ro -v /var/www/certbot:/var/www/certbot:ro)
 docker run --rm "${mounts[@]}" --entrypoint nginx "$image" -t
 previous=
+original=
+legacy=camisetas360-frontend-frontend-1
 if docker container inspect app-produccion >/dev/null 2>&1; then
-    previous="app-produccion-backup-$(date +%s)"
-    docker stop app-produccion
-    docker rename app-produccion "$previous"
-fi
-rollback() {
-    docker rm -f app-produccion >/dev/null 2>&1 || true
-    if [ -n "$previous" ]; then
-        docker rename "$previous" app-produccion
-        docker start app-produccion
+    original=app-produccion
+    if docker container inspect "$legacy" >/dev/null 2>&1; then
+        fail "Existen app-produccion y $legacy. Revisar los contenedores antes de desplegar."
     fi
+elif docker container inspect "$legacy" >/dev/null 2>&1; then
+    original=$legacy
+fi
+stopped=false
+renamed=false
+replacement_attempted=false
+rollback() {
+    status=$1
+    trap - ERR
+    echo "ERROR: Falló el despliegue; restaurando el contenedor anterior." >&2
+    if [ "$replacement_attempted" = true ]; then
+        docker rm -f app-produccion >/dev/null 2>&1 || true
+    fi
+    if [ "$renamed" = true ]; then
+        docker rename "$previous" "$original" || echo "ERROR: No se pudo restaurar el nombre $original desde $previous." >&2
+    fi
+    if [ "$stopped" = true ]; then
+        docker start "$original" || echo "ERROR: No se pudo iniciar $original; requiere recuperación manual." >&2
+    fi
+    exit "$status"
 }
-trap rollback ERR
-docker run -d --restart unless-stopped -p 80:80 -p 443:443 \
+trap 'rollback "$?"' ERR
+if [ -n "$original" ]; then
+    previous="$original-backup-$(date +%s)"
+    docker stop "$original"
+    stopped=true
+    docker rename "$original" "$previous"
+    renamed=true
+fi
+# El Nginx del host conserva el puerto 80 y las rutas hacia las APIs.
+replacement_attempted=true
+docker run -d --restart unless-stopped -p 443:443 \
     "${mounts[@]}" --name app-produccion "$image"
 curl --fail --silent --show-error --retry 5 --retry-connrefused --retry-delay 2 \
     --connect-timeout 5 --max-time 15 \
