@@ -22,3 +22,12 @@ pnpm-debug.log*
 *.ntvs*
 *.njsproj
 *.sln
+
+# Nunca enviar credenciales o claves privadas al contexto de construcción.
+.env
+.env.*
+.aws/
+.ssh/
+*.pem
+*.key
+letsencrypt/

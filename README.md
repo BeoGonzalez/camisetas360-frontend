@@ -77,6 +77,11 @@ pnpm run build
 
 | Servicio | Endpoint | Protegido |
 |---|---|---|
-| Catálogo | `GET /api/v1/catalogo/productos` | No |
+| Catálogo | `GET /api/v1/catalog/products` | No |
 | Carrito | `POST /api/v1/carrito/checkout` | Sí (JWT) |
 | Perfil | `GET /api/v1/auth/profile` | Sí (JWT) |
+
+## Publicación HTTPS en AWS
+
+Consulta [el procedimiento de TLS, CORS y validación](docs/aws-publication.md).
+La imagen requiere certificados públicos montados desde el host antes de arrancar.

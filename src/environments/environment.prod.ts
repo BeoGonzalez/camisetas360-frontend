@@ -23,7 +23,7 @@ export const environment = {
     
     authority: 'https://login.microsoftonline.com/e5372bf0-c5e3-4286-887c-79069f209c1f',
     
-    // URL de redirección en la instancia web pública (con HTTPS Auto-firmado)
+    // Debe coincidir con el origen HTTPS certificado y registrado en Entra ID.
     redirectUri: 'https://100.49.172.129/',
     
     scopes: ['api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Autenticacion.Microsoft'],
