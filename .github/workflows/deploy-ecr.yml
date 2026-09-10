@@ -57,6 +57,11 @@ jobs:
             --comment "Desplegar nueva imagen de frontend en EC2" \
             --parameters "file://$RUNNER_TEMP/ssm-parameters.json" \
             --query Command.CommandId --output text)
-          aws ssm wait command-executed --command-id "$command_id" --instance-id "$EC2_FRONTEND_ID"
+          echo "SSM CommandId: $command_id"
+          # Mostrar el error remoto incluso cuando el waiter falla con set -e.
+          wait_status=0
+          aws ssm wait command-executed --command-id "$command_id" --instance-id "$EC2_FRONTEND_ID" || wait_status=$?
           aws ssm get-command-invocation --command-id "$command_id" --instance-id "$EC2_FRONTEND_ID" \
-            --query '{Status:Status,ResponseCode:ResponseCode}'
+            --query '{Status:Status,StatusDetails:StatusDetails,ResponseCode:ResponseCode,StandardOutputContent:StandardOutputContent,StandardErrorContent:StandardErrorContent}' \
+            --output json
+          exit "$wait_status"
