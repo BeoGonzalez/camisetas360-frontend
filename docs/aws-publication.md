@@ -1,5 +1,20 @@
 # Publicación HTTPS y CORS de Camisetas360
 
+## Actualización: configuración real aportada desde EC2
+
+La salida de Session Manager confirma que Nginx del host sirve el puerto 80
+y las rutas `/api/v1/auth/`, `/api/v1/catalog/` y `/api/v1/carrito/` hacia
+`10.0.140.182`. El contenedor `camisetas360-frontend-frontend-1` sirve 443,
+sin montajes y con certificado autofirmado. No hay Certbot ni certificados
+en `/etc/letsencrypt/live/`.
+
+Seguir [el procedimiento desde AWS Academy](academy-tls.md) para esta instancia.
+El deploy actualizado publica solo 443 y migra el contenedor existente a
+`app-produccion`, conservando un respaldo y restaurando el nombre original ante
+fallos. Después de migrar, GitHub Actions administra el frontend: no ejecutar
+`docker compose up` con el archivo antiguo, que intentaría ocupar de nuevo 443.
+Las verificaciones de la sección siguiente son históricas, anteriores a esta salida.
+
 ## Estado comprobado el 10 de septiembre de 2026
 
 Los cambios de este repositorio están preparados; **no se han aplicado a AWS**.
@@ -52,8 +67,8 @@ certbot --version
 Identificar quién ocupa 80/443 y guardar copia de sus configuraciones. No arrancar
 otro servidor encima ni reemplazar un proxy que también sirve al backend. Si el
 host ya termina TLS, adaptar allí la configuración y el deploy antes de ejecutarlo.
-El script de este repositorio asume que el contenedor frontend será el dueño de
-ambos puertos.
+El script actualizado conserva el puerto 80 en el host y publica solo el 443
+del contenedor frontend.
 
 1. Mantener accesibles 80 y 443 para el frontend en el security group. Crear
    `/var/www/certbot` en el host. Servir `/.well-known/acme-challenge/` por HTTP
@@ -77,7 +92,7 @@ corresponda. No imprimir ni copiar `privkey.pem`.
 4. Verificar los archivos en `/etc/letsencrypt/live/100.49.172.129/`. Si Certbot
    asigna otro nombre de lineage, ajustar Nginx y `deploy/frontend.sh`. Montar
    **todo** `/etc/letsencrypt` como solo lectura (los enlaces de `live` apuntan a
-   `archive`). El workflow publica 80/443, prueba `nginx -t`, despliega la imagen
+   `archive`). El workflow publica 443, prueba `nginx -t`, despliega la imagen
    por SHA y comprueba TLS sin deshabilitar validación. Ante fallo restaura el
    contenedor previo. Requiere `curl` y `openssl` en el host.
 5. Instalar un hook ejecutable en
