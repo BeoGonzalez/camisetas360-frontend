@@ -1,0 +1,7 @@
+{
+  "AllowOrigins": ["https://100.49.172.129"],
+  "AllowMethods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  "AllowHeaders": ["Content-Type", "Authorization"],
+  "AllowCredentials": false,
+  "ExposeHeaders": []
+}

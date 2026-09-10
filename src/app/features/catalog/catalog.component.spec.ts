@@ -27,10 +27,15 @@ it('carga sin MSAL ni Bearer y muestra los tres productos y sus decimales', () =
   const request = TestBed.inject(HttpTestingController).expectOne(url);
   expect(request.request.method).toBe('GET');
   expect(request.request.headers.has('Authorization')).toBe(false);
+  expect(request.request.withCredentials).toBe(false);
   request.flush(products);
   fixture.detectChanges();
   const content = fixture.nativeElement.textContent;
-  for (const product of products) expect(content).toContain(product.name);
+  for (const product of products) {
+    expect(content).toContain(product.name);
+    expect(content).toContain(`Stock: ${product.stock}`);
+  }
+  expect(content.match(/Disponible/g)).toHaveLength(3);
   expect(content).toContain('39.99');
   expect(content).toContain('49.99');
   expect(content).toContain('Imagen no disponible');
@@ -51,6 +56,16 @@ it('muestra lista vacía', () => {
   TestBed.inject(HttpTestingController).expectOne(url).flush([]);
   fixture.detectChanges();
   expect(fixture.nativeElement.textContent).toContain('No hay productos disponibles');
+});
+
+it('muestra sin stock y deshabilita la compra cuando el stock es cero', () => {
+  const fixture = TestBed.createComponent(CatalogComponent);
+  fixture.detectChanges();
+  TestBed.inject(HttpTestingController).expectOne(url).flush([{ ...products[0], stock: 0 }]);
+  fixture.detectChanges();
+  expect(fixture.nativeElement.textContent).toContain('Stock: 0');
+  expect(fixture.nativeElement.textContent).toContain('Sin stock');
+  expect(fixture.nativeElement.querySelector('button').disabled).toBe(true);
 });
 
 it('muestra error y permite reintentar', () => {

@@ -30,14 +30,7 @@ COPY --from=builder /app/dist/camisetas360-frontend/browser /usr/share/nginx/htm
 # Copiamos la configuración personalizada de Nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Instalamos openssl para generar el certificado autofirmado
-RUN apk add --no-cache openssl && \
-    mkdir -p /etc/ssl/private /etc/ssl/certs && \
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -keyout /etc/ssl/private/nginx-selfsigned.key \
-    -out /etc/ssl/certs/nginx-selfsigned.crt \
-    -subj "/C=US/ST=State/L=City/O=Organization/CN=100.49.172.129"
-
-EXPOSE 443
+# Certificados públicos y claves se montan desde el host, nunca en la imagen.
+EXPOSE 80 443
 
 CMD ["nginx", "-g", "daemon off;"]

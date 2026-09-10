@@ -99,6 +99,9 @@ import { Product } from '../../core/models/product.model';
               </div>
 
               <p class="mt-3 text-sm text-slate-500">SKU: {{ product.sku }} · Stock: {{ product.stock }}</p>
+              <p class="mt-1 text-sm font-semibold" [class.text-emerald-700]="product.stock > 0" [class.text-slate-500]="product.stock <= 0">
+                {{ product.stock > 0 ? 'Disponible' : 'Sin stock' }}
+              </p>
               <p class="mt-1 text-xs text-slate-500">Tallas no informadas por el catálogo.</p>
 
               <!-- Botón Agregar -->
@@ -170,9 +173,8 @@ export class CatalogComponent implements OnInit {
         this.products.set(data);
         this.loading.set(false);
       },
-      error: (err) => {
-        console.error('[CatalogComponent] Error al cargar catálogo:', err);
-        this.error.set('No se pudieron cargar los productos. Revisa la conexión y la configuración CORS del servidor.');
+      error: () => {
+        this.error.set('No se pudieron cargar los productos. Inténtalo de nuevo en unos momentos.');
         this.loading.set(false);
       },
     });
