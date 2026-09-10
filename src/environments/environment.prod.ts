@@ -20,12 +20,15 @@ export const environment = {
   /** Configuración de Azure Entra ID (OAuth2) para producción */
   azure: {
     clientId: '719c999d-0f57-4ad5-9bd9-a72be5ca07e0',
-    
+
     authority: 'https://login.microsoftonline.com/e5372bf0-c5e3-4286-887c-79069f209c1f',
-    
+
     // Debe coincidir con el origen HTTPS certificado y registrado en Entra ID.
     redirectUri: 'https://100.49.172.129/',
-    
-    scopes: ['api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Autenticacion.Microsoft'],
+
+    scopes: [
+      'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Autenticacion.Microsoft',
+      'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Cart.Write'
+    ]
   },
 };
