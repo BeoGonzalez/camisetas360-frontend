@@ -1,0 +1,131 @@
+# ==========================================
+# BACKENDS
+# ==========================================
+
+upstream auth_backend {
+    server ${BACKEND_HOST}:${AUTH_PORT};
+    keepalive 16;
+}
+
+upstream catalog_backend {
+    server ${BACKEND_HOST}:${CATALOG_PORT};
+    keepalive 16;
+}
+
+upstream cart_backend {
+    server ${BACKEND_HOST}:${CART_PORT};
+    keepalive 16;
+}
+
+
+# ==========================================
+# HTTP - API Gateway
+# ==========================================
+
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+        try_files $uri =404;
+    }
+
+    # ============================
+    # AUTH
+    # ============================
+
+    location /api/v1/auth/ {
+        proxy_pass http://auth_backend;
+
+        include /etc/nginx/snippets/proxy-headers.conf;
+    }
+
+    # ============================
+    # CATALOG
+    # ============================
+
+    location /api/v1/catalog/ {
+        proxy_pass http://catalog_backend;
+
+        include /etc/nginx/snippets/proxy-headers.conf;
+    }
+
+    # ============================
+    # CARRITO
+    # ============================
+
+    location /api/v1/carrito/ {
+        proxy_pass http://cart_backend;
+
+        include /etc/nginx/snippets/proxy-headers.conf;
+    }
+
+    # ============================
+    # ANGULAR
+    # ============================
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+
+
+# ==========================================
+# HTTPS DIRECTO EC2 - OPCIONAL
+# ==========================================
+
+server {
+    listen 443 ssl;
+    server_name ${PUBLIC_HOST};
+
+    ssl_certificate
+        /etc/letsencrypt/live/${PUBLIC_HOST}/fullchain.pem;
+
+    ssl_certificate_key
+        /etc/letsencrypt/live/${PUBLIC_HOST}/privkey.pem;
+
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers 'HIGH:!aNULL:!MD5';
+    ssl_prefer_server_ciphers off;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    location /api/v1/auth/ {
+        proxy_pass http://auth_backend;
+
+        include /etc/nginx/snippets/proxy-headers.conf;
+    }
+
+    location /api/v1/catalog/ {
+        proxy_pass http://catalog_backend;
+
+        include /etc/nginx/snippets/proxy-headers.conf;
+    }
+
+    location /api/v1/carrito/ {
+        proxy_pass http://cart_backend;
+
+        include /etc/nginx/snippets/proxy-headers.conf;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
