@@ -40,6 +40,9 @@ rollback() {
     trap - ERR
     echo "ERROR: Falló el despliegue; restaurando el contenedor anterior." >&2
     if [ "$replacement_attempted" = true ]; then
+        # Conservar el diagnóstico antes de eliminar el contenedor fallido.
+        docker inspect --format '{{json .State}}' app-produccion >&2 || true
+        docker logs --tail 80 app-produccion >&2 || true
         docker rm -f app-produccion >/dev/null 2>&1 || true
     fi
     if [ "$renamed" = true ]; then
@@ -62,8 +65,11 @@ fi
 replacement_attempted=true
 docker run -d --restart unless-stopped -p 443:443 \
     "${mounts[@]}" --name app-produccion "$image"
-curl --fail --silent --show-error --retry 5 --retry-connrefused --retry-delay 2 \
+# Docker puede publicar 443 antes de que Nginx acepte conexiones TLS.
+# Reintentar también resets durante el handshake, conservando validación TLS.
+curl --fail --silent --show-error --retry 10 --retry-all-errors --retry-delay 2 \
+    --retry-max-time 30 --output /dev/null \
     --connect-timeout 5 --max-time 15 \
-    --resolve 100.49.172.129:443:127.0.0.1 https://100.49.172.129/catalog >/dev/null
+    --resolve 100.49.172.129:443:127.0.0.1 https://100.49.172.129/catalog
 trap - ERR
 # Se conserva el contenedor anterior detenido para rollback manual.
