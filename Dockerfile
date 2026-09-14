@@ -1,36 +1,43 @@
 # ==========================================
-# ETAPA 1: Construcción (Builder)
+# ANGULAR BUILD
 # ==========================================
+
 FROM node:22-alpine AS builder
+
 WORKDIR /app
 
-# Habilitamos Corepack para usar el gestor pnpm nativo del proyecto
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable \
+    && corepack prepare pnpm@latest --activate
 
-# Copiamos los manifiestos y el lockfile de pnpm
 COPY package.json pnpm-lock.yaml ./
 
-# Instalamos las dependencias permitiendo scripts nativos (esbuild, parcel, etc.)
-RUN pnpm install --no-frozen-lockfile --unsafe-perm=true
+RUN pnpm install \
+    --no-frozen-lockfile \
+    --unsafe-perm=true
 
-# Copiamos el resto del código fuente
 COPY . .
 
-# Generamos el build de producción
 RUN pnpm run build
 
+
 # ==========================================
-# ETAPA 2: Servidor de Producción (Nginx)
+# NGINX
 # ==========================================
+
 FROM nginx:alpine
 
-# Copiamos los archivos compilados hacia la carpeta pública de Nginx
-COPY --from=builder /app/dist/camisetas360-frontend/browser /usr/share/nginx/html
+COPY --from=builder \
+    /app/dist/camisetas360-frontend/browser \
+    /usr/share/nginx/html
 
-# Copiamos la configuración personalizada de Nginx
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+RUN mkdir -p /etc/nginx/snippets
 
-# Certificados públicos y claves se montan desde el host, nunca en la imagen.
+COPY nginx.conf.template \
+    /etc/nginx/templates/default.conf.template
+
+COPY nginx/proxy-headers.conf \
+    /etc/nginx/snippets/proxy-headers.conf
+
 EXPOSE 80 443
 
 CMD ["nginx", "-g", "daemon off;"]
