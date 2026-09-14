@@ -20,7 +20,7 @@ export const environment = {
   /** Configuración de Azure Entra ID (OAuth2) */
   azure: {
     clientId: '719c999d-0f57-4ad5-9bd9-a72be5ca07e0',
-    
+
     authority: 'https://login.microsoftonline.com/e5372bf0-c5e3-4286-887c-79069f209c1f',
     redirectUri: 'http://localhost:4200/',
     
