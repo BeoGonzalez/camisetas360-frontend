@@ -32,11 +32,15 @@ COPY --from=builder \
 
 RUN mkdir -p /etc/nginx/snippets
 
-COPY nginx.conf.template \
+COPY nginx/nginx.conf.template \
     /etc/nginx/templates/default.conf.template
 
 COPY nginx/proxy-headers.conf \
     /etc/nginx/snippets/proxy-headers.conf
+
+# Solo sustituir nuestras variables.
+# Evita reemplazar $uri, $host, $scheme, etc.
+ENV NGINX_ENVSUBST_FILTER='^(BACKEND_HOST|AUTH_PORT|CATALOG_PORT|CART_PORT|PUBLIC_HOST)$'
 
 EXPOSE 80 443
 
