@@ -26,6 +26,6 @@ export const environment = {
     // Debe coincidir con el origen HTTPS certificado y registrado en Entra ID.
     redirectUri: 'http://localhost:4200/',
     
-    scopes: ['api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Autenticacion.Microsoft'],
+    scopes: ['api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Autenticacion.Microsoft','api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Cart.Write'],
   },
 };
