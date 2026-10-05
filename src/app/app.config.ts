@@ -1,14 +1,14 @@
 import { ApplicationConfig, APP_INITIALIZER } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
+
 import {
   provideHttpClient,
-  withInterceptors,
   withInterceptorsFromDi,
   HTTP_INTERCEPTORS,
 } from '@angular/common/http';
+
 import { environment } from '../environments/environment';
-import { jwtInterceptor } from './core/interceptors/jwt.interceptor';
 
 import {
   MsalInterceptor,
@@ -21,6 +21,7 @@ import {
   MsalGuardConfiguration,
   MsalInterceptorConfiguration,
 } from '@azure/msal-angular';
+
 import {
   PublicClientApplication,
   BrowserCacheLocation,
@@ -28,8 +29,7 @@ import {
 } from '@azure/msal-browser';
 
 /**
- * Factory que crea la instancia de PublicClientApplication para MSAL.
- * Configura el client ID, authority y redirect URI desde environment.
+ * Crea la instancia principal de MSAL.
  */
 export function MSALInstanceFactory(): PublicClientApplication {
   return new PublicClientApplication({
@@ -38,6 +38,7 @@ export function MSALInstanceFactory(): PublicClientApplication {
       authority: environment.azure.authority,
       redirectUri: environment.azure.redirectUri,
     },
+
     cache: {
       cacheLocation: BrowserCacheLocation.LocalStorage,
     },
@@ -45,30 +46,83 @@ export function MSALInstanceFactory(): PublicClientApplication {
 }
 
 /**
- * Factory que configura el guard de MSAL con interacción por redirección.
+ * Configuración de rutas protegidas mediante MsalGuard.
  */
 export function MSALGuardConfigFactory(): MsalGuardConfiguration {
   return {
     interactionType: InteractionType.Redirect,
-    authRequest: { scopes: environment.azure.scopes },
+
+    authRequest: {
+      scopes: environment.azure.scopes,
+    },
   };
 }
 
 /**
- * Factory que configura el interceptor de MSAL con el mapa de recursos protegidos.
- * Cualquier petición al API Gateway recibirá automáticamente el token.
+ * Configura qué scope corresponde a cada API.
+ *
+ * MSAL obtiene el access token apropiado y añade:
+ *
+ * Authorization: Bearer <token>
  */
-export function MSALInterceptorConfigFactory(): MsalInterceptorConfiguration {
-  const protectedResourceMap = new Map<string, Array<string> | null>();
-  // Debe preceder al comodín del gateway: catálogo público.
+export function MSALInterceptorConfigFactory():
+  MsalInterceptorConfiguration {
+
+  const protectedResourceMap =
+    new Map<string, Array<string> | null>();
+
+  const apiScope =
+    'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0';
+
+  /*
+   * Perfil autenticado
+   *
+   * GET /api/v1/auth/profile
+   */
   protectedResourceMap.set(
-    `${environment.apiGateway}${environment.endpoints.catalog}/products`,
-    null
+    `${environment.apiGateway}${environment.endpoints.auth}/*`,
+    [
+      `${apiScope}/Profile.Read`,
+    ]
   );
+
+  /*
+   * Catálogo
+   *
+   * GET /api/v1/catalog/products
+   */
   protectedResourceMap.set(
-    environment.apiGateway + '/*',
-    environment.azure.scopes
+    `${environment.apiGateway}${environment.endpoints.catalog}/*`,
+    [
+      `${apiScope}/Catalog.Read`,
+    ]
   );
+
+  /*
+   * Checkout
+   *
+   * POST /api/v1/carrito/checkout
+   */
+  protectedResourceMap.set(
+    `${environment.apiGateway}${environment.endpoints.cart}/*`,
+    [
+      `${apiScope}/Checkout.Create`,
+    ]
+  );
+
+  /*
+   * Órdenes
+   *
+   * GET /api/v1/orders
+   * GET /api/v1/orders/{id}
+   */
+  protectedResourceMap.set(
+    `${environment.apiGateway}${environment.endpoints.orders}/*`,
+    [
+      `${apiScope}/Orders.Read`,
+    ]
+  );
+
   return {
     interactionType: InteractionType.Redirect,
     protectedResourceMap,
@@ -76,51 +130,110 @@ export function MSALInterceptorConfigFactory(): MsalInterceptorConfiguration {
 }
 
 /**
- * Factory para inicializar MSAL v3.
- * Requiere llamar a initialize() y handleRedirectPromise() antes de usar la aplicación.
+ * Inicializa MSAL antes de que arranque la aplicación.
  */
-export function MSALInitializerFactory(msalService: MsalService) {
+export function MSALInitializerFactory(
+  msalService: MsalService
+) {
   return async () => {
+
     await msalService.instance.initialize();
-    const res = await msalService.instance.handleRedirectPromise();
-    if (res?.account) {
-      msalService.instance.setActiveAccount(res.account);
+
+    const response =
+      await msalService.instance.handleRedirectPromise();
+
+    if (response?.account) {
+      msalService.instance.setActiveAccount(
+        response.account
+      );
+      return;
+    }
+
+    /*
+     * Si recargamos la página y ya existe una cuenta
+     * almacenada, la dejamos como activa.
+     */
+    const activeAccount =
+      msalService.instance.getActiveAccount();
+
+    if (!activeAccount) {
+
+      const accounts =
+        msalService.instance.getAllAccounts();
+
+      if (accounts.length > 0) {
+        msalService.instance.setActiveAccount(
+          accounts[0]
+        );
+      }
     }
   };
 }
 
 /**
- * Configuración principal de la aplicación Angular.
- *
- * Combina el interceptor JWT funcional (para inyectar Bearer Token)
- * con los providers de MSAL para la autenticación con Azure Entra ID.
+ * Configuración principal de Angular.
  */
 export const appConfig: ApplicationConfig = {
+
   providers: [
+
     provideRouter(routes),
-    // Registrar interceptor JWT funcional + interceptores legacy (MSAL) vía DI
+
+    /*
+     * Importante:
+     *
+     * Ya NO usamos jwtInterceptor.
+     *
+     * MSALInterceptor es el único encargado
+     * de añadir el Bearer Token.
+     */
     provideHttpClient(
-      withInterceptors([jwtInterceptor]),
       withInterceptorsFromDi()
     ),
-    // MSAL Providers
+
+    /*
+     * MSAL HTTP interceptor.
+     */
     {
       provide: HTTP_INTERCEPTORS,
       useClass: MsalInterceptor,
       multi: true,
     },
-    { provide: MSAL_INSTANCE, useFactory: MSALInstanceFactory },
-    { provide: MSAL_GUARD_CONFIG, useFactory: MSALGuardConfigFactory },
+
+    /*
+     * MSAL instance.
+     */
+    {
+      provide: MSAL_INSTANCE,
+      useFactory: MSALInstanceFactory,
+    },
+
+    /*
+     * MSAL Guard.
+     */
+    {
+      provide: MSAL_GUARD_CONFIG,
+      useFactory: MSALGuardConfigFactory,
+    },
+
+    /*
+     * MSAL HTTP resource mapping.
+     */
     {
       provide: MSAL_INTERCEPTOR_CONFIG,
       useFactory: MSALInterceptorConfigFactory,
     },
+
+    /*
+     * Inicialización de MSAL.
+     */
     {
       provide: APP_INITIALIZER,
       useFactory: MSALInitializerFactory,
       deps: [MsalService],
       multi: true,
     },
+
     MsalService,
     MsalGuard,
     MsalBroadcastService,
