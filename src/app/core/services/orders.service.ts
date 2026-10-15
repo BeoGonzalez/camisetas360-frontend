@@ -2,8 +2,11 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
-import { environment } from '../../../../environments/environment';
-import { OrderResponse } from '../../../core/models/order-response.model';
+// Sube 3 niveles: services -> core -> app -> src/environments
+import { environment } from '../../../environments/environment';
+
+// Sube 1 nivel: services -> core/models
+import { OrderResponse } from '../models/order-response.model';
 
 /**
  * Servicio encargado de consultar las órdenes
