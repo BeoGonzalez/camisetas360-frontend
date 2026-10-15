@@ -1,4 +1,4 @@
-name: Construir y Desplegar en EC2
+name: Construir y Desplegar en ECS
 
 on:
   push:
@@ -8,14 +8,16 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: camisetas360-frontend
+  ECS_CLUSTER: camisetas360-cluster
+  ECS_SERVICE: camisetas360-frontend-service
 
 concurrency:
-  group: deploy-frontend-ec2
+  group: deploy-frontend-ecs
   cancel-in-progress: false
 
 jobs:
   build-and-deploy:
-    name: Build, Push and Deploy
+    name: Build, Push and Deploy to ECS
     runs-on: ubuntu-latest
 
     steps:
@@ -87,13 +89,11 @@ jobs:
           echo "=========================================="
           echo "Publicando imagen latest"
           echo "=========================================="
-
           docker push "$IMAGE_LATEST"
 
           echo "=========================================="
           echo "Publicando imagen con SHA"
           echo "=========================================="
-
           docker push "$IMAGE_SHA"
 
           echo "=========================================="
@@ -102,491 +102,24 @@ jobs:
           echo "$IMAGE_SHA"
 
       # ========================================
-      # OBTENER INSTANCE IDs DINÁMICAMENTE
+      # DEPLOY EN AMAZON ECS (FARGATE)
       # ========================================
-      - name: Obtener IDs de las instancias EC2 del Frontend
+      - name: Actualizar servicio en Amazon ECS
         run: |
           set -euo pipefail
 
-          echo "Buscando instancias EC2 por tag Name=ec2-frontend1 o ec2-frontend2..."
-          
-          INSTANCE_IDS=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=ec2-frontend1,ec2-frontend2" "Name=instance-state-name,Values=running" \
-            --query "Reservations[*].Instances[*].InstanceId" \
-            --output text)
-            
-          if [ -z "$INSTANCE_IDS" ] || [[ "$INSTANCE_IDS" == *"None"* ]]; then
-            echo "ERROR: No se encontraron las instancias ec2-frontend1 o ec2-frontend2 en estado running."
-            exit 1
-          fi
-          
-          FORMATTED_IDS=$(echo $INSTANCE_IDS | tr '\n' ' ' | tr '\t' ' ' | xargs)
-          
-          echo "Instancias encontradas: $FORMATTED_IDS"
-          
-          echo "EC2_FRONTEND_IDS=$FORMATTED_IDS" >> $GITHUB_ENV
+          echo "=========================================="
+          echo "Actualizando servicio ECS"
+          echo "=========================================="
+          echo "Cluster: $ECS_CLUSTER"
+          echo "Service: $ECS_SERVICE"
 
-      # ========================================
-      # DEPLOY EC2 CON SSM
-      # ========================================
-      - name: Desplegar en múltiples EC2 mediante AWS SSM
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-
-          IMAGE="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE" \
+            --force-new-deployment \
+            --no-cli-pager
 
           echo "=========================================="
-          echo "Imagen a desplegar"
+          echo "¡Despliegue a ECS ordenado con éxito!"
           echo "=========================================="
-          echo "$IMAGE"
-
-          # ========================================
-          # SCRIPT QUE SE EJECUTARÁ DENTRO DE EC2
-          # ========================================
-          REMOTE_SCRIPT=$(cat <<'C360_REMOTE'
-          set -euo pipefail
-
-          COMPOSE_DIR="/home/ec2-user/camisetas360-frontend"
-
-          echo "=========================================="
-          echo "CAMISETAS360 - DEPLOY FRONTEND"
-          echo "=========================================="
-
-          echo "Imagen:"
-          echo "$FRONTEND_IMAGE"
-
-          echo "Región:"
-          echo "$AWS_REGION_REMOTE"
-
-          echo "Registry:"
-          echo "$ECR_REGISTRY"
-
-          # ----------------------------------------
-          # VALIDAR DIRECTORIO
-          # ----------------------------------------
-          if [ ! -d "$COMPOSE_DIR" ]; then
-            echo "ERROR: No existe el directorio:"
-            echo "$COMPOSE_DIR"
-            exit 1
-          fi
-
-          cd "$COMPOSE_DIR"
-
-          echo "Directorio actual:"
-          pwd
-
-          # ----------------------------------------
-          # VALIDAR DOCKER
-          # ----------------------------------------
-          echo "=========================================="
-          echo "Validando Docker"
-          echo "=========================================="
-
-          if ! command -v docker >/dev/null 2>&1; then
-            echo "ERROR: Docker no está instalado."
-            exit 1
-          fi
-
-          docker --version
-
-          # ----------------------------------------
-          # DETECTAR DOCKER COMPOSE
-          # ----------------------------------------
-          echo "=========================================="
-          echo "Detectando Docker Compose"
-          echo "=========================================="
-
-          if docker compose version >/dev/null 2>&1; then
-            COMPOSE_MODE="v2"
-            echo "Docker Compose v2 detectado:"
-            docker compose version
-          elif command -v docker-compose >/dev/null 2>&1; then
-            COMPOSE_MODE="v1"
-            echo "Docker Compose v1 detectado:"
-            docker-compose --version
-          else
-            echo "=========================================="
-            echo "ERROR: DOCKER COMPOSE NO ESTÁ INSTALADO"
-            echo "=========================================="
-            echo ""
-            echo "Debes instalar Docker Compose en la EC2."
-            exit 1
-          fi
-
-          compose() {
-            if [ "$COMPOSE_MODE" = "v2" ]; then
-              docker compose "$@"
-            else
-              docker-compose "$@"
-            fi
-          }
-
-          # ----------------------------------------
-          # MOSTRAR ARCHIVOS
-          # ----------------------------------------
-          echo "=========================================="
-          echo "Archivos del proyecto"
-          echo "=========================================="
-          ls -la
-
-          # ----------------------------------------
-          # DETECTAR CONTENEDOR ANTERIOR
-          # ----------------------------------------
-          echo "=========================================="
-          echo "Detectando contenedor anterior"
-          echo "=========================================="
-
-          OLD_CONTAINER_ID="$(
-            docker ps -a \
-              --filter "label=com.docker.compose.service=frontend" \
-              --format '{{.ID}}' \
-              | head -n 1
-          )"
-
-          OLD_IMAGE_REF=""
-
-          if [ -n "$OLD_CONTAINER_ID" ]; then
-            OLD_IMAGE_ID="$(
-              docker inspect \
-                --format '{{.Image}}' \
-                "$OLD_CONTAINER_ID"
-            )"
-
-            OLD_IMAGE_REF="$(
-              docker image inspect \
-                "$OLD_IMAGE_ID" \
-                --format '{{index .RepoDigests 0}}' \
-                2>/dev/null || true
-            )"
-
-            echo "Contenedor anterior:"
-            echo "$OLD_CONTAINER_ID"
-            echo "Imagen anterior:"
-            echo "$OLD_IMAGE_REF"
-          else
-            echo "No existe un contenedor frontend anterior."
-          fi
-
-          # ----------------------------------------
-          # LOGIN ECR
-          # ----------------------------------------
-          echo "=========================================="
-          echo "Login ECR"
-          echo "=========================================="
-
-          aws ecr get-login-password \
-            --region "$AWS_REGION_REMOTE" \
-            | docker login \
-              --username AWS \
-              --password-stdin "$ECR_REGISTRY"
-
-          # ----------------------------------------
-          # DESCARGAR NUEVA IMAGEN
-          # ----------------------------------------
-          echo "=========================================="
-          echo "Descargando imagen nueva"
-          echo "=========================================="
-
-          docker pull "$FRONTEND_IMAGE"
-
-          # ----------------------------------------
-          # VALIDAR DOCKER COMPOSE
-          # ----------------------------------------
-          echo "=========================================="
-          echo "Validando docker-compose.yml"
-          echo "=========================================="
-
-          export FRONTEND_IMAGE
-
-          compose config >/dev/null
-
-          echo "Docker Compose válido."
-
-          # ----------------------------------------
-          # CREAR CONTENEDOR
-          # ----------------------------------------
-          echo "=========================================="
-          echo "Creando nuevo contenedor"
-          echo "=========================================="
-
-          compose up \
-            -d \
-            --force-recreate \
-            --no-deps \
-            frontend
-
-          # ----------------------------------------
-          # ESTADO INICIAL
-          # ----------------------------------------
-          echo "=========================================="
-          echo "Estado inicial"
-          echo "=========================================="
-
-          compose ps
-
-          # ----------------------------------------
-          # HEALTH CHECK
-          # ----------------------------------------
-          echo "=========================================="
-          echo "Esperando Nginx"
-          echo "=========================================="
-
-          DEPLOY_OK=false
-
-          for attempt in $(seq 1 30); do
-            echo "Health check $attempt/30"
-
-            NEW_CONTAINER_ID="$(
-              docker ps \
-                --filter "label=com.docker.compose.service=frontend" \
-                --format '{{.ID}}' \
-                | head -n 1
-            )"
-
-            if [ -z "$NEW_CONTAINER_ID" ]; then
-              echo "Contenedor todavía no disponible."
-              sleep 3
-              continue
-            fi
-
-            RUNNING="$(
-              docker inspect \
-                --format '{{.State.Running}}' \
-                "$NEW_CONTAINER_ID" \
-                2>/dev/null || echo false
-            )"
-
-            if [ "$RUNNING" != "true" ]; then
-              echo "Contenedor todavía no está Running."
-              sleep 3
-              continue
-            fi
-
-            if ! docker exec \
-              "$NEW_CONTAINER_ID" \
-              nginx -t >/dev/null 2>&1; then
-              echo "Nginx todavía no está listo."
-              sleep 3
-              continue
-            fi
-
-            if curl \
-              --silent \
-              --show-error \
-              --fail \
-              --connect-timeout 3 \
-              --max-time 5 \
-              http://127.0.0.1/health \
-              >/dev/null; then
-
-              DEPLOY_OK=true
-              echo "Health check correcto."
-              break
-            fi
-
-            echo "Health check todavía no responde."
-            sleep 3
-          done
-
-          # ----------------------------------------
-          # SI FALLA HEALTH CHECK
-          # ----------------------------------------
-          if [ "$DEPLOY_OK" != "true" ]; then
-            echo "=========================================="
-            echo "ERROR: HEALTH CHECK FALLÓ"
-            echo "=========================================="
-            echo ""
-            echo "Estado de Docker Compose:"
-            compose ps || true
-            echo ""
-            echo "=========================================="
-            echo "LOGS DEL FRONTEND"
-            echo "=========================================="
-            compose logs --tail=150 frontend || true
-            echo ""
-            echo "=========================================="
-            echo "Docker PS"
-            echo "=========================================="
-            docker ps -a || true
-
-            # ROLLBACK
-            if [ -n "$OLD_IMAGE_REF" ] && [ "$OLD_IMAGE_REF" != "<no value>" ]; then
-              echo "=========================================="
-              echo "Ejecutando rollback"
-              echo "=========================================="
-              echo "Restaurando: $OLD_IMAGE_REF"
-              export FRONTEND_IMAGE="$OLD_IMAGE_REF"
-              compose up -d --force-recreate --no-deps frontend
-              echo "Rollback ejecutado."
-              echo "Estado después del rollback:"
-              compose ps || true
-            else
-              echo "No existe una imagen anterior segura para rollback."
-            fi
-            exit 1
-          fi
-
-          # ----------------------------------------
-          # OBTENER NUEVO CONTENEDOR Y VERIFICAR
-          # ----------------------------------------
-          NEW_CONTAINER_ID="$(
-            docker ps \
-              --filter "label=com.docker.compose.service=frontend" \
-              --format '{{.ID}}' \
-              | head -n 1
-          )"
-
-          if [ -z "$NEW_CONTAINER_ID" ]; then
-            echo "ERROR: No se encontró el nuevo contenedor frontend."
-            exit 1
-          fi
-
-          ACTUAL_IMAGE="$(
-            docker inspect \
-              --format '{{.Config.Image}}' \
-              "$NEW_CONTAINER_ID"
-          )"
-
-          echo "=========================================="
-          echo "VERIFICACIÓN"
-          echo "=========================================="
-          echo "Container ID: $NEW_CONTAINER_ID"
-          echo "Imagen esperada: $FRONTEND_IMAGE"
-          echo "Imagen ejecutándose: $ACTUAL_IMAGE"
-
-          if [ "$ACTUAL_IMAGE" != "$FRONTEND_IMAGE" ]; then
-            echo "=========================================="
-            echo "ERROR"
-            echo "=========================================="
-            echo "El contenedor no está usando la imagen esperada."
-            exit 1
-          fi
-
-          echo "=========================================="
-          echo "DEPLOY COMPLETADO CORRECTAMENTE"
-          echo "=========================================="
-          compose ps
-          echo ""
-          echo "Frontend desplegado: $FRONTEND_IMAGE"
-          echo "=========================================="
-          echo "FIN DEPLOY FRONTEND"
-          echo "=========================================="
-          C360_REMOTE
-          )
-
-          # ========================================
-          # CREAR JSON PARA SSM
-          # ========================================
-          jq -n \
-            --arg script "$REMOTE_SCRIPT" \
-            --arg registry "$ECR_REGISTRY" \
-            --arg image "$IMAGE" \
-            --arg region "$AWS_REGION" \
-            '{
-              commands: [
-                (
-                  "ECR_REGISTRY=" + ($registry | @sh) + "\n"
-                  + "FRONTEND_IMAGE=" + ($image | @sh) + "\n"
-                  + "AWS_REGION_REMOTE=" + ($region | @sh) + "\n"
-                  + $script
-                )
-              ]
-            }' \
-            > "$RUNNER_TEMP/ssm-parameters.json"
-
-          echo "=========================================="
-          echo "Enviando comando a instancias EC2: $EC2_FRONTEND_IDS"
-          echo "=========================================="
-
-          # ========================================
-          # SEND COMMAND (A MULTIPLES INSTANCIAS)
-          # ========================================
-          COMMAND_ID=$(
-            aws ssm send-command \
-              --instance-ids $EC2_FRONTEND_IDS \
-              --document-name "AWS-RunShellScript" \
-              --comment "Deploy Camisetas360 frontend $IMAGE_TAG" \
-              --parameters "file://$RUNNER_TEMP/ssm-parameters.json" \
-              --query "Command.CommandId" \
-              --output text
-          )
-
-          echo "SSM CommandId: $COMMAND_ID"
-
-          # ========================================
-          # ESPERAR RESULTADO
-          # ========================================
-          echo "=========================================="
-          echo "Esperando ejecución SSM..."
-          echo "=========================================="
-          
-          # Extraemos la primera instancia para monitorear y leer logs
-          FIRST_INSTANCE=$(echo $EC2_FRONTEND_IDS | awk '{print $1}')
-
-          aws ssm wait command-executed \
-            --command-id "$COMMAND_ID" \
-            --instance-id "$FIRST_INSTANCE" \
-            || true
-
-          # ========================================
-          # OBTENER RESULTADO SSM (DE LA PRIMERA INSTANCIA)
-          # ========================================
-          RESULT=$(
-            aws ssm get-command-invocation \
-              --command-id "$COMMAND_ID" \
-              --instance-id "$FIRST_INSTANCE" \
-              --query '{
-                Status:Status,
-                StatusDetails:StatusDetails,
-                ResponseCode:ResponseCode,
-                StandardOutputContent:StandardOutputContent,
-                StandardErrorContent:StandardErrorContent
-              }' \
-              --output json
-          )
-
-          echo "=========================================="
-          echo "SALIDA COMPLETA SSM (Muestra de Instancia: $FIRST_INSTANCE)"
-          echo "=========================================="
-
-          echo "$RESULT"
-
-          STATUS=$(echo "$RESULT" | jq -r '.Status')
-          RESPONSE_CODE=$(echo "$RESULT" | jq -r '.ResponseCode')
-
-          echo "=========================================="
-          echo "SSM RESULT"
-          echo "=========================================="
-
-          echo "Status: $STATUS"
-          echo "ResponseCode: $RESPONSE_CODE"
-
-          # ========================================
-          # VALIDAR RESULTADO
-          # ========================================
-          if [ "$STATUS" != "Success" ]; then
-            echo "=========================================="
-            echo "ERROR"
-            echo "=========================================="
-            echo "El despliegue remoto falló en al menos una instancia."
-            echo ""
-            echo "STDOUT:"
-            echo "$RESULT" | jq -r '.StandardOutputContent'
-            echo ""
-            echo "STDERR:"
-            echo "$RESULT" | jq -r '.StandardErrorContent'
-            exit 1
-          fi
-
-          if [ "$RESPONSE_CODE" != "0" ]; then
-            echo "ERROR: El comando remoto devolvió código $RESPONSE_CODE."
-            exit 1
-          fi
-
-          echo "=========================================="
-          echo "DEPLOY COMPLETADO EN TODAS LAS INSTANCIAS"
-          echo "=========================================="
-          echo "Imagen: $IMAGE"
