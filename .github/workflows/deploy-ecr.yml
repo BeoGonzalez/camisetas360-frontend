@@ -387,25 +387,21 @@ jobs:
 
             fi
 
-            # ------------------------------------
+           # ------------------------------------
             # HEALTH CHECK HTTP/HTTPS
             # ------------------------------------
             if curl \
-              -k \
               --silent \
               --show-error \
               --fail \
               --connect-timeout 3 \
               --max-time 5 \
-              https://127.0.0.1/healthz \
+              http://127.0.0.1/health \
               >/dev/null; then
 
               DEPLOY_OK=true
-
               echo "Health check correcto."
-
               break
-
             fi
 
             echo "Health check todavía no responde."
