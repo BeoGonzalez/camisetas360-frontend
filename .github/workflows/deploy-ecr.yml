@@ -8,7 +8,7 @@ on:
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: camisetas360-frontend
-  ECS_CLUSTER: camisetas360-cluster
+  ECS_CLUSTER: camisetas360-backend-cluster
   ECS_SERVICE: camisetas360-frontend-service
 
 concurrency:
