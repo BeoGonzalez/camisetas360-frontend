@@ -108,15 +108,15 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "Buscando instancias EC2 por tag Name=camisetas360-frontend..."
+          echo "Buscando instancias EC2 por tag Name=ec2-frontend1 o ec2-frontend2..."
           
           INSTANCE_IDS=$(aws ec2 describe-instances \
-            --filters "Name=tag:Name,Values=camisetas360-frontend" "Name=instance-state-name,Values=running" \
+            --filters "Name=tag:Name,Values=ec2-frontend1,ec2-frontend2" "Name=instance-state-name,Values=running" \
             --query "Reservations[*].Instances[*].InstanceId" \
             --output text)
             
           if [ -z "$INSTANCE_IDS" ] || [[ "$INSTANCE_IDS" == *"None"* ]]; then
-            echo "ERROR: No se encontró ninguna instancia EC2 corriendo con el tag Name=camisetas360-frontend"
+            echo "ERROR: No se encontraron las instancias ec2-frontend1 o ec2-frontend2 en estado running."
             exit 1
           fi
           
@@ -373,7 +373,6 @@ jobs:
               continue
             fi
 
-            # Health Check actualizado a la raíz HTTP (coincide con tu nginx.conf)
             if curl \
               --silent \
               --show-error \
