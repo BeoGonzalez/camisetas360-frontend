@@ -34,6 +34,10 @@ export class AuthInterceptor implements HttpInterceptor {
       req.url.includes('/api/v1/') ||
       req.url.includes('execute-api.us-east-1.amazonaws.com');
 
+    console.log(`[AuthInterceptor] Evaluando URL: ${req.url} -> ¿Es API?: ${isApiRequest}`);
+    console.log(`[AuthInterceptor] ¿Usuario reconocido como logueado?: ${this.cognitoAuth.isLoggedIn()}`);
+    console.log(`[AuthInterceptor] ¿Existe Access Token en memoria?: ${!!this.cognitoAuth.accessToken()}`);
+
     // DEBUG: Revisa la consola (F12) para confirmar que el interceptor ve la petición
     console.log(`[AuthInterceptor] Evaluando URL: ${req.url} -> ¿Es API?: ${isApiRequest}`);
 
