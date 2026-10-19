@@ -46,7 +46,7 @@ export class AuthService {
     if (!name) return '?';
     return name
       .split(' ')
-      .map((part) => part.charAt(0).toUpperCase())
+      .map((part: string) => part.charAt(0).toUpperCase()) // <-- Tipado estricto corregido
       .slice(0, 2)
       .join('');
   });
@@ -108,6 +108,17 @@ export class AuthService {
     this.msalService.loginRedirect().subscribe();
   }
 
+  /** Inicia el flujo de login redirigiendo a la Interfaz Alojada (Hosted UI) de AWS Cognito */
+  loginCognito(): void {
+    const domain = environment.cognito.domain;
+    const clientId = environment.cognito.clientId;
+    const redirectUri = encodeURIComponent(environment.cognito.redirectUri);
+    const scopes = environment.cognito.scopes.join('+');
+
+    const cognitoUrl = `${domain}/login?client_id=${clientId}&response_type=code&scope=${scopes}&redirect_uri=${redirectUri}`;
+    window.location.href = cognitoUrl;
+  }
+
   /** Cierra la sesión activa (tanto de Cognito como de MSAL) */
   logout(): void {
     if (this.cognitoAuth.isLoggedIn()) {
@@ -157,4 +168,3 @@ export class AuthService {
     }
   }
 }
-
