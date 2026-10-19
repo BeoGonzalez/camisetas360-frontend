@@ -5,20 +5,33 @@ on:
     branches:
       - main
 
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 env:
   AWS_REGION: us-east-1
   ECR_REPOSITORY: camisetas360-frontend
   ECS_CLUSTER: ecommerce-cluster
   ECS_SERVICE: frontend-service
+  # Nombres creados por Terraform (ecs.tf)
+  TASK_FAMILY: frontend-task
+  CONTAINER_NAME: frontend
 
 concurrency:
   group: deploy-frontend-ecs
   cancel-in-progress: false
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build-and-deploy:
     name: Build, Push and Deploy to ECS
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       # ========================================
@@ -29,6 +42,10 @@ jobs:
 
       # ========================================
       # AWS
+      #
+      # Credenciales temporales del Learner Lab: expiran cuando
+      # termina la sesión del lab. Hay que actualizar los tres
+      # secrets cada vez que se inicia una sesión nueva.
       # ========================================
       - name: Configurar credenciales de AWS
         uses: aws-actions/configure-aws-credentials@v4
@@ -37,6 +54,15 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verificar identidad de AWS
+        run: |
+          set -euo pipefail
+
+          if ! aws sts get-caller-identity; then
+            echo "::error::Credenciales AWS inválidas o expiradas. Actualiza los secrets desde AWS Details del Learner Lab."
+            exit 1
+          fi
 
       # ========================================
       # ECR LOGIN
@@ -69,14 +95,13 @@ jobs:
             -t "$IMAGE_SHA" \
             .
 
-          echo "=========================================="
           echo "Build completado"
-          echo "=========================================="
 
       # ========================================
       # PUSH ECR
       # ========================================
       - name: Publicar imágenes en Amazon ECR
+        id: push
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
@@ -86,40 +111,258 @@ jobs:
           IMAGE_LATEST="$ECR_REGISTRY/$ECR_REPOSITORY:latest"
           IMAGE_SHA="$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
-          echo "=========================================="
-          echo "Publicando imagen latest"
-          echo "=========================================="
           docker push "$IMAGE_LATEST"
-
-          echo "=========================================="
-          echo "Publicando imagen con SHA"
-          echo "=========================================="
           docker push "$IMAGE_SHA"
 
-          echo "=========================================="
-          echo "Imagen publicada correctamente"
-          echo "=========================================="
+          echo "Imagen publicada correctamente:"
           echo "$IMAGE_SHA"
+
+          # El deploy usa el tag con SHA (inmutable), no :latest.
+          echo "uri=$IMAGE_SHA" >> "$GITHUB_OUTPUT"
 
       # ========================================
       # DEPLOY EN AMAZON ECS (FARGATE)
+      #
+      # force-new-deployment por sí solo NO sirve: reinicia la tarea
+      # con la MISMA task definition, y la que creó Terraform apunta a
+      # nginx:latest, no a tu imagen de ECR. Por eso se registra una
+      # revisión nueva de la task definition con la imagen recién
+      # publicada y se actualiza el servicio para que la use.
       # ========================================
-      - name: Actualizar servicio en Amazon ECS
+      - name: Verificar recursos de ECS
         run: |
           set -euo pipefail
 
-          echo "=========================================="
-          echo "Actualizando servicio ECS"
-          echo "=========================================="
-          echo "Cluster: $ECS_CLUSTER"
-          echo "Service: $ECS_SERVICE"
+          STATUS="$(
+            aws ecs describe-services \
+              --cluster "$ECS_CLUSTER" \
+              --services "$ECS_SERVICE" \
+              --region "$AWS_REGION" \
+              --query 'services[0].status' \
+              --output text
+          )"
+
+          if [ "$STATUS" != "ACTIVE" ]; then
+            echo "::error::El servicio $ECS_SERVICE no está ACTIVE (estado: $STATUS)."
+            exit 1
+          fi
+
+      - name: Descargar task definition actual
+        run: |
+          set -euo pipefail
+
+          aws ecs describe-task-definition \
+            --task-definition "$TASK_FAMILY" \
+            --region "$AWS_REGION" \
+            --query 'taskDefinition' \
+            > current-task-definition.json
+
+          jq -e \
+            --arg container "$CONTAINER_NAME" \
+            '.containerDefinitions[] | select(.name == $container)' \
+            current-task-definition.json \
+            >/dev/null
+
+      # describe-task-definition devuelve campos de solo lectura que
+      # register-task-definition no acepta. Se eliminan y se cambia
+      # solo la imagen del contenedor.
+      - name: Generar nueva task definition con la imagen publicada
+        env:
+          IMAGE_URI: ${{ steps.push.outputs.uri }}
+        run: |
+          set -euo pipefail
+
+          jq \
+            --arg container "$CONTAINER_NAME" \
+            --arg image "$IMAGE_URI" \
+            '
+            del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy
+            )
+            |
+            (
+              .containerDefinitions[]
+              | select(.name == $container)
+              | .image
+            ) = $image
+            ' \
+            current-task-definition.json \
+            > new-task-definition.json
+
+          echo "Imagen en la nueva task definition:"
+          jq -r \
+            --arg container "$CONTAINER_NAME" \
+            '.containerDefinitions[] | select(.name == $container) | .image' \
+            new-task-definition.json
+
+      - name: Registrar nueva revisión de la task definition
+        id: register
+        run: |
+          set -euo pipefail
+
+          TASK_DEFINITION_ARN="$(
+            aws ecs register-task-definition \
+              --cli-input-json file://new-task-definition.json \
+              --region "$AWS_REGION" \
+              --query 'taskDefinition.taskDefinitionArn' \
+              --output text
+          )"
+
+          echo "Registrada: $TASK_DEFINITION_ARN"
+          echo "arn=$TASK_DEFINITION_ARN" >> "$GITHUB_OUTPUT"
+
+      # No se pasa --desired-count: se respeta el valor actual del
+      # servicio y el auto scaling (1 a 4 tareas).
+      - name: Actualizar servicio en Amazon ECS
+        env:
+          TASK_DEFINITION_ARN: ${{ steps.register.outputs.arn }}
+        run: |
+          set -euo pipefail
 
           aws ecs update-service \
             --cluster "$ECS_CLUSTER" \
             --service "$ECS_SERVICE" \
+            --task-definition "$TASK_DEFINITION_ARN" \
             --force-new-deployment \
-            --no-cli-pager
+            --region "$AWS_REGION" \
+            --no-cli-pager \
+            >/dev/null
 
-          echo "=========================================="
-          echo "¡Despliegue a ECS ordenado con éxito!"
-          echo "=========================================="
+          echo "Despliegue iniciado:"
+          echo "Servicio:        $ECS_SERVICE"
+          echo "Task definition: $TASK_DEFINITION_ARN"
+
+      # El comando wait corta a los 10 minutos, por eso se reintenta
+      # hasta 2 veces. Si falla, imprime eventos y el motivo de las
+      # tareas detenidas para poder diagnosticar.
+      - name: Esperar a que el servicio se estabilice
+        run: |
+          set -euo pipefail
+
+          echo "Esperando a $ECS_SERVICE..."
+
+          ATTEMPTS=0
+          MAX_ATTEMPTS=2
+
+          while (( ATTEMPTS < MAX_ATTEMPTS )); do
+            if aws ecs wait services-stable \
+              --cluster "$ECS_CLUSTER" \
+              --services "$ECS_SERVICE" \
+              --region "$AWS_REGION"; then
+
+              echo "$ECS_SERVICE está estable."
+              exit 0
+            else
+              ATTEMPTS=$((ATTEMPTS + 1))
+              echo "Intento ${ATTEMPTS} de ${MAX_ATTEMPTS}: el servicio aún no se estabiliza."
+            fi
+          done
+
+          echo "::error::El servicio $ECS_SERVICE no se estabilizó después de $((MAX_ATTEMPTS * 10)) minutos."
+
+          echo "--- Últimos eventos del servicio ---"
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --region "$AWS_REGION" \
+            --query 'services[0].events[:10].message' \
+            --output json
+
+          echo "--- Tareas detenidas recientemente ---"
+          STOPPED="$(
+            aws ecs list-tasks \
+              --cluster "$ECS_CLUSTER" \
+              --service-name "$ECS_SERVICE" \
+              --desired-status STOPPED \
+              --region "$AWS_REGION" \
+              --query 'taskArns[:3]' \
+              --output text
+          )"
+
+          if [ -n "$STOPPED" ] && [ "$STOPPED" != "None" ]; then
+            # shellcheck disable=SC2086
+            aws ecs describe-tasks \
+              --cluster "$ECS_CLUSTER" \
+              --tasks $STOPPED \
+              --region "$AWS_REGION" \
+              --query 'tasks[].{Reason:stoppedReason,Containers:containers[].{Name:name,Reason:reason,ExitCode:exitCode}}' \
+              --output json
+          fi
+
+          exit 1
+
+      - name: Verificar el servicio desplegado
+        env:
+          TASK_DEFINITION_ARN: ${{ steps.register.outputs.arn }}
+          IMAGE_URI: ${{ steps.push.outputs.uri }}
+        run: |
+          set -euo pipefail
+
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" \
+            --region "$AWS_REGION" \
+            --query '
+              services[0].{
+                Service:serviceName,
+                Status:status,
+                Desired:desiredCount,
+                Running:runningCount,
+                Pending:pendingCount,
+                TaskDefinition:taskDefinition
+              }
+            ' \
+            --output table
+
+          CURRENT_TD="$(
+            aws ecs describe-services \
+              --cluster "$ECS_CLUSTER" \
+              --services "$ECS_SERVICE" \
+              --region "$AWS_REGION" \
+              --query 'services[0].taskDefinition' \
+              --output text
+          )"
+
+          DESIRED="$(
+            aws ecs describe-services \
+              --cluster "$ECS_CLUSTER" \
+              --services "$ECS_SERVICE" \
+              --region "$AWS_REGION" \
+              --query 'services[0].desiredCount' \
+              --output text
+          )"
+
+          RUNNING="$(
+            aws ecs describe-services \
+              --cluster "$ECS_CLUSTER" \
+              --services "$ECS_SERVICE" \
+              --region "$AWS_REGION" \
+              --query 'services[0].runningCount' \
+              --output text
+          )"
+
+          if [ "$CURRENT_TD" != "$TASK_DEFINITION_ARN" ]; then
+            echo "::error::El servicio no quedó con la task definition nueva (actual: $CURRENT_TD)."
+            exit 1
+          fi
+
+          if [ "$DESIRED" -lt 1 ] || [ "$RUNNING" -lt "$DESIRED" ]; then
+            echo "::error::El servicio no tiene todas sus tareas corriendo (running=$RUNNING, desired=$DESIRED)."
+            exit 1
+          fi
+
+          {
+            echo "## Camisetas360 Frontend"
+            echo
+            echo "- Cluster: $ECS_CLUSTER (Fargate)"
+            echo "- Servicio: $ECS_SERVICE"
+            echo "- Imagen: \`$IMAGE_URI\`"
+            echo "- Task definition: \`$TASK_DEFINITION_ARN\`"
+            echo "- Resultado: exitoso"
+          } >> "$GITHUB_STEP_SUMMARY"
