@@ -1,7 +1,6 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of } from 'rxjs';
-import { map, catchError } from 'rxjs/operators';
+import { Observable } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { CartItem } from '../../../core/models/cart-item.model';
 import { Product } from '../../../core/models/product.model';
@@ -22,13 +21,13 @@ export class CartService {
 
   /** Cantidad total de ítems en el carrito */
   readonly itemCount = computed(() =>
-    this._items().reduce((total, item) => total + item.quantity, 0)
+    this._items().reduce((total: number, item: CartItem) => total + item.quantity, 0)
   );
 
   /** Subtotal calculado del carrito */
   readonly total = computed(() =>
     this._items().reduce(
-      (sum, item) => sum + item.unitPrice * item.quantity,
+      (sum: number, item: CartItem) => sum + item.unitPrice * item.quantity,
       0
     )
   );
@@ -45,7 +44,7 @@ export class CartService {
     if (product.stock <= 0 || !Number.isInteger(quantity) || quantity <= 0) return;
     const currentItems = this._items();
     const existingIndex = currentItems.findIndex(
-      (item) => item.productId === product.sku && item.talla === talla
+      (item: CartItem) => item.productId === product.sku && item.talla === talla
     );
 
     if (existingIndex >= 0) {
@@ -77,7 +76,7 @@ export class CartService {
   removeFromCart(productId: string, talla: string): void {
     this._items.set(
       this._items().filter(
-        (item) => !(item.productId === productId && item.talla === talla)
+        (item: CartItem) => !(item.productId === productId && item.talla === talla)
       )
     );
   }
@@ -90,7 +89,7 @@ export class CartService {
       return;
     }
 
-    const updatedItems = this._items().map((item) =>
+    const updatedItems = this._items().map((item: CartItem) =>
       item.productId === productId && item.talla === talla
         ? { ...item, quantity }
         : item
@@ -109,36 +108,10 @@ export class CartService {
    * El interceptor JWT inyecta automáticamente el Bearer Token.
    */
   checkout(): Observable<{ orderId: string; status: string }> {
-    const orderRequest = {
-      items: this._items().map((i) => ({
-        sku: i.sku || i.productId,
-        quantity: i.quantity,
-        unitPrice: i.unitPrice,
-      })),
-    };
-
-    return this.http
-      .post<any>(`${this.apiUrl}/checkout`, orderRequest)
-      .pipe(
-        map((res) => ({
-          orderId: String(
-            res?.requestId ||
-            res?.orderId ||
-            `ORD-${Date.now().toString().slice(-6)}`
-          ),
-          status: res?.status || 'ACCEPTED',
-        })),
-        catchError((err) => {
-          console.warn(
-            '[CartService] Checkout completado en modo resiliente:',
-            err.message
-          );
-          const fallbackOrderId = `ORD-${Date.now().toString().slice(-6)}`;
-          return of({
-            orderId: fallbackOrderId,
-            status: 'ACCEPTED',
-          });
-        })
-      );
+    const orderRequest = { items: this._items() };
+    return this.http.post<{ orderId: string; status: string }>(
+      `${this.apiUrl}/checkout`,
+      orderRequest
+    );
   }
 }

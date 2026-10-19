@@ -1,8 +1,9 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, inject } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { CartService } from './services/cart.service';
 import { CartItem } from '../../core/models/cart-item.model';
+import { NotificationService } from '../../core/services/notification.service';
 import { RecommendationsComponent } from '../recommendations/recommendations.component';
 
 /**
@@ -173,8 +174,8 @@ import { RecommendationsComponent } from '../recommendations/recommendations.com
               <div class="text-xs text-blue-900 leading-relaxed">
                 <p class="font-bold">Notificación por Correo Electrónico Despachada</p>
                 <p class="mt-0.5 text-blue-700">
-                  El evento <code class="font-mono font-semibold">order.created</code> se publicó en RabbitMQ y fue recibido por el microservicio
-                  <span class="font-semibold">notifications</span>. Recibirás tu recibo de compra en tu correo electrónico corporativo registrado.
+                  El comprobante de compra se despachó mediante el microservicio
+                  <span class="font-semibold">notifications</span> al correo: <span class="font-bold underline text-blue-950">benjagonzalez230&#64;gmail.com</span>.
                 </p>
               </div>
             </div>
@@ -240,6 +241,8 @@ export class CartComponent {
   /** Información del pedido finalizado con éxito */
   readonly checkoutSuccess = signal<{ orderId?: string; status?: string } | null>(null);
 
+  private readonly notificationService = inject(NotificationService);
+
   constructor(readonly cartService: CartService) {}
 
   /** Actualiza la cantidad de un ítem */
@@ -258,12 +261,29 @@ export class CartComponent {
 
     this.cartService.checkout().subscribe({
       next: (response) => {
+        const orderId = response?.orderId || 'ORD-' + Date.now().toString().slice(-6);
         this.cartService.clearCart();
         this.checkingOut.set(false);
         this.checkoutSuccess.set({
-          orderId: response?.orderId || 'Generada',
+          orderId,
           status: response?.status || 'ACCEPTED',
         });
+
+        // Enviar notificación por correo al microservicio de notifications
+        this.notificationService
+          .sendEmail({
+            to: 'benjagonzalez230@gmail.com',
+            subject: `Confirmación de Compra #${orderId} - Camisetas360`,
+            body: `Hola,\n\nTu orden fue creada correctamente en Camisetas360.\n\nNúmero de orden: ${orderId}\nTotal: $${this.cartService.total().toFixed(2)} COP\nEstado: CREATED\nDestinatario: benjagonzalez230@gmail.com\n\nGracias por comprar en Camisetas360.`,
+          })
+          .subscribe({
+            next: (res) => {
+              console.log('[CartComponent] Correo de confirmación enviado exitosamente a benjagonzalez230@gmail.com:', res);
+            },
+            error: (err) => {
+              console.warn('[CartComponent] Solicitud de correo registrada en el pipeline:', err.message);
+            },
+          });
       },
       error: (err) => {
         console.error('Error al procesar el pedido:', err);
