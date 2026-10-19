@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { environment } from '../../../../environments/environment';
 import { Product } from '../../../core/models/product.model';
 
@@ -13,6 +14,33 @@ import { Product } from '../../../core/models/product.model';
 @Injectable({ providedIn: 'root' })
 export class CatalogService {
   private readonly apiUrl = `${environment.apiGateway}${environment.endpoints.catalog}`;
+
+  private readonly seedProducts: Product[] = [
+    {
+      sku: 'CAM-001',
+      name: 'Camiseta Titular 2026',
+      category: 'Fútbol',
+      price: 39.99,
+      stock: 100,
+      description: 'Camiseta oficial de local para la temporada',
+    },
+    {
+      sku: 'CAM-002',
+      name: 'Camiseta Visitante 2026',
+      category: 'Fútbol',
+      price: 39.99,
+      stock: 80,
+      description: 'Camiseta alternativa de visitante',
+    },
+    {
+      sku: 'CAM-003',
+      name: 'Camiseta Retro Edición Especial',
+      category: 'Colección',
+      price: 49.99,
+      stock: 25,
+      description: 'Diseño clásico conmemorativo',
+    },
+  ];
 
   constructor(private readonly http: HttpClient) {}
 

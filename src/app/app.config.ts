@@ -65,6 +65,8 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
  *
  * Authorization: Bearer <token>
  */
+import { AuthInterceptor } from './core/interceptors/auth.interceptor';
+
 export function MSALInterceptorConfigFactory():
   MsalInterceptorConfiguration {
 
@@ -74,65 +76,25 @@ export function MSALInterceptorConfigFactory():
   const apiScope =
     'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0';
 
-  /*
-   * Perfil autenticado
-   *
-   * GET /api/v1/auth/profile
-   */
   protectedResourceMap.set(
     `${environment.apiGateway}${environment.endpoints.auth}/*`,
-    [
-      `${apiScope}/Profile.Read`,
-    ]
+    [`${apiScope}/Profile.Read`]
   );
-
-  /*
-   * Catálogo
-   *
-   * GET /api/v1/catalog/products
-   */
   protectedResourceMap.set(
     `${environment.apiGateway}${environment.endpoints.catalog}/*`,
-    [
-      `${apiScope}/Catalog.Read`,
-    ]
+    [`${apiScope}/Catalog.Read`]
   );
-
-  /*
-   * Checkout
-   *
-   * POST /api/v1/carrito/checkout
-   */
   protectedResourceMap.set(
     `${environment.apiGateway}${environment.endpoints.cart}/*`,
-    [
-      `${apiScope}/Checkout.Create`,
-    ]
+    [`${apiScope}/Checkout.Create`]
   );
-
-  /*
-   * Órdenes
-   *
-   * GET /api/v1/orders
-   * GET /api/v1/orders/{id}
-   */
   protectedResourceMap.set(
     `${environment.apiGateway}${environment.endpoints.orders}/*`,
-    [
-      `${apiScope}/Orders.Read`,
-    ]
+    [`${apiScope}/Orders.Read`]
   );
-
-  /*
-   * Notificaciones
-   *
-   * POST /api/v1/notifications/email
-   */
   protectedResourceMap.set(
     `${environment.apiGateway}${environment.endpoints.notifications}/*`,
-    [
-      `${apiScope}/Notifications.Send`,
-    ]
+    [`${apiScope}/Notifications.Send`]
   );
 
   return {
@@ -202,6 +164,15 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(
       withInterceptorsFromDi()
     ),
+
+    /*
+     * Camisetas360 Auth interceptor (Cognito / API Gateway).
+     */
+    {
+      provide: HTTP_INTERCEPTORS,
+      useClass: AuthInterceptor,
+      multi: true,
+    },
 
     /*
      * MSAL HTTP interceptor.

@@ -1,21 +1,25 @@
-import { CanActivateFn, Router } from '@angular/router';
+import { CanActivateFn, Router, UrlTree } from '@angular/router';
 import { inject } from '@angular/core';
 import { MsalService } from '@azure/msal-angular';
+import { CognitoAuthService } from '../services/cognito-auth.service';
 
 /**
  * Guard funcional que protege rutas que requieren autenticación.
  *
- * Verifica si existe una cuenta activa en MSAL:
- * - Si hay cuenta activa → permite el acceso.
- * - Si no hay cuenta → redirige a la página de login.
+ * Verifica si existe una cuenta activa en MSAL (Azure Entra ID)
+ * o una sesión autenticada en AWS Cognito:
+ * - Si hay sesión activa -> permite el acceso (true).
+ * - Si no hay sesión -> redirige a la página de login (UrlTree).
  */
-export const authGuard: CanActivateFn = () => {
+export const authGuard: CanActivateFn = (): boolean | UrlTree => {
   const msalService = inject(MsalService);
+  const cognitoAuth = inject(CognitoAuthService);
   const router = inject(Router);
 
-  const activeAccount = msalService.instance.getActiveAccount();
+  const msalAccount = msalService.instance.getActiveAccount();
+  const cognitoLoggedIn = cognitoAuth.isLoggedIn();
 
-  if (activeAccount) {
+  if (msalAccount || cognitoLoggedIn) {
     return true;
   }
 
