@@ -1,17 +1,14 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { MsalService } from '@azure/msal-angular';
-import { HttpClient } from '@angular/common/http';
-import { Observable, of } from 'rxjs';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Observable, of, catchError, throwError } from 'rxjs';
 import { environment } from '../../../../environments/environment';
-import { UserProfile } from '../../../core/models/user-profile.model';
+import { UserProfile } from '../../../core/models/auth.model';
 import { CognitoAuthService } from '../../../core/services/cognito-auth.service';
 
 /**
- * Servicio de autenticación unificado que encapsula Azure Entra ID (MSAL)
- * y AWS Cognito (Serverless Lambda).
- *
- * Expone Signals reactivos para el estado de autenticación y métodos
- * para login, logout y obtención del perfil.
+ * Servicio de autenticación unificado que encapsula Azure Entra ID (MSAL),
+ * AWS Cognito y métodos de respaldo para almacenamiento local de tokens.
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -23,9 +20,9 @@ export class AuthService {
   private readonly _isLoggedIn = signal<boolean>(false);
   private readonly _activeUser = signal<string>('');
 
-  /** Signal reactivo público: indica si hay sesión activa (MSAL o Cognito) */
+  /** Signal reactivo público: indica si hay sesión activa (MSAL, Cognito o LocalStorage) */
   readonly isLoggedIn = computed<boolean>(() => {
-    return this._isLoggedIn() || this.cognitoAuth.isLoggedIn();
+    return this._isLoggedIn() || this.cognitoAuth.isLoggedIn() || !!this.accessToken();
   });
 
   /** Signal reactivo público: nombre del usuario activo */
@@ -46,12 +43,12 @@ export class AuthService {
     if (!name) return '?';
     return name
       .split(' ')
-      .map((part: string) => part.charAt(0).toUpperCase()) // <-- Tipado estricto corregido
+      .map((part: string) => part.charAt(0).toUpperCase())
       .slice(0, 2)
       .join('');
   });
 
-  /** Signal reactivo: roles del usuario extraídos del token (Cognito o MSAL) */
+  /** Signal reactivo: roles del usuario extraídos del token */
   readonly userRoles = computed<string[]>(() => {
     if (this.cognitoAuth.isLoggedIn()) {
       return this.cognitoAuth.userRoles();
@@ -78,14 +75,15 @@ export class AuthService {
     return activeAccount?.username || '';
   });
 
-  /** Proveedor de autenticación activo ('azure' | 'cognito' | null) */
-  readonly authProvider = computed<'azure' | 'cognito' | null>(() => {
+  /** Proveedor de autenticación activo */
+  readonly authProvider = computed<'azure' | 'cognito' | 'local' | null>(() => {
     if (this.cognitoAuth.isLoggedIn()) return 'cognito';
     if (this._isLoggedIn()) return 'azure';
+    if (this.accessToken()) return 'local';
     return null;
   });
 
-  private readonly apiUrl = `${environment.apiGateway}${environment.endpoints.auth}`;
+  private readonly apiUrl = `${environment.apiGateway}/api/v1/auth`;
 
   constructor() {
     this.checkAccount();
@@ -108,7 +106,7 @@ export class AuthService {
     this.msalService.loginRedirect().subscribe();
   }
 
-  /** Inicia el flujo de login redirigiendo a la Interfaz Alojada (Hosted UI) de AWS Cognito */
+  /** Inicia el flujo de login redirigiendo a la Interfaz Alojada de AWS Cognito */
   loginCognito(): void {
     const domain = environment.cognito.domain;
     const clientId = environment.cognito.clientId;
@@ -119,7 +117,7 @@ export class AuthService {
     window.location.href = cognitoUrl;
   }
 
-  /** Cierra la sesión activa (tanto de Cognito como de MSAL) */
+  /** Cierra la sesión activa */
   logout(): void {
     if (this.cognitoAuth.isLoggedIn()) {
       this.cognitoAuth.logout();
@@ -127,11 +125,45 @@ export class AuthService {
     if (this.msalService.instance.getActiveAccount()) {
       this.msalService.logoutRedirect().subscribe();
     }
+    this.clearTokens();
   }
 
-  /**
-   * Obtiene el perfil del usuario desde el backend o del usuario Cognito.
-   */
+  // ==========================================
+  // MÉTODOS DE SOPORTE PARA EL INTERCEPTOR Y TOKENS
+  // ==========================================
+
+  /** Guarda los tokens de acceso e identidad en el almacenamiento local */
+  setTokens(accessToken: string, idToken: string): void {
+    localStorage.setItem('access_token', accessToken);
+    localStorage.setItem('id_token', idToken);
+  }
+
+  /** Retorna el Access Token actual (Cognito, CognitoAuthService o LocalStorage) */
+  accessToken(): string | null {
+    if (this.cognitoAuth.isLoggedIn()) {
+      return this.cognitoAuth.accessToken();
+    }
+    return localStorage.getItem('access_token');
+  }
+
+  /** Retorna el ID Token actual */
+  idToken(): string | null {
+    if (this.cognitoAuth.isLoggedIn()) {
+      return this.cognitoAuth.idToken();
+    }
+    return localStorage.getItem('id_token');
+  }
+
+  /** Limpia los tokens del almacenamiento local */
+  clearTokens(): void {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('id_token');
+  }
+
+  // ==========================================
+  // ENDPOINTS HTTP DE AUTENTICACIÓN
+  // ==========================================
+
   getProfile(): Observable<UserProfile> {
     if (this.cognitoAuth.isLoggedIn()) {
       const u = this.cognitoAuth.currentUser();
@@ -142,16 +174,28 @@ export class AuthService {
         identificador: u?.username || u?.email || '',
       });
     }
-    return this.http.get<UserProfile>(`${this.apiUrl}/profile`);
+    return this.http.get<UserProfile>(`${this.apiUrl}/profile`)
+      .pipe(catchError(this.handleError));
   }
 
-  /**
-   * Adquiere un token de acceso (Cognito o MSAL).
-   */
+  verifySession(): Observable<void> {
+    return this.http.post<void>(`${this.apiUrl}/verify-session`, {})
+      .pipe(catchError(this.handleError));
+  }
+
+  getPublicStatus(): Observable<any> {
+    return this.http.get<any>(`${this.apiUrl}/public/status`)
+      .pipe(catchError(this.handleError));
+  }
+
+  /** Adquiere un token de acceso asíncrono para MSAL o Cognito */
   async getAccessToken(): Promise<string | null> {
     if (this.cognitoAuth.isLoggedIn()) {
       return this.cognitoAuth.accessToken();
     }
+
+    const localToken = this.accessToken();
+    if (localToken) return localToken;
 
     const activeAccount = this.msalService.instance.getActiveAccount();
     if (!activeAccount) return null;
@@ -166,5 +210,10 @@ export class AuthService {
       console.warn('[AuthService] No se pudo adquirir token silencioso de MSAL');
       return null;
     }
+  }
+
+  private handleError(error: HttpErrorResponse) {
+    console.error('AuthService Error:', error.message);
+    return throwError(() => new Error('Ocurrió un error en la autenticación. Inténtalo de nuevo más tarde.'));
   }
 }
