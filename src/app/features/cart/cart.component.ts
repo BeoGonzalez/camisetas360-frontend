@@ -3,6 +3,7 @@ import { DecimalPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { CartService } from './services/cart.service';
 import { CartItem } from '../../core/models/cart-item.model';
+import { RecommendationsComponent } from '../recommendations/recommendations.component';
 
 /**
  * Componente del carrito de compras.
@@ -14,7 +15,7 @@ import { CartItem } from '../../core/models/cart-item.model';
 @Component({
   selector: 'app-cart',
   standalone: true,
-  imports: [RouterLink, DecimalPipe],
+  imports: [RouterLink, DecimalPipe, RecommendationsComponent],
   template: `
     <div class="mx-auto max-w-4xl">
       <!-- Header -->
@@ -146,6 +147,71 @@ import { CartItem } from '../../core/models/cart-item.model';
             </div>
           </div>
         </div>
+      } @else if (checkoutSuccess()) {
+        <!-- Order Confirmation Screen -->
+        <div class="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+          <div class="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+            <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <div class="mt-4 text-center">
+            <h2 class="text-2xl font-extrabold text-slate-800">¡Pedido Finalizado con Éxito!</h2>
+            <p class="mt-1 text-sm text-slate-500">
+              Solicitud de compra registrada correctamente · Estado: <span class="font-semibold text-emerald-600">{{ checkoutSuccess()!.status || 'ACCEPTED' }}</span>
+            </p>
+          </div>
+
+          <!-- Notification Feedback -->
+          <div class="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4">
+            <div class="flex items-start gap-3">
+              <div class="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div class="text-xs text-blue-900 leading-relaxed">
+                <p class="font-bold">Notificación por Correo Electrónico Despachada</p>
+                <p class="mt-0.5 text-blue-700">
+                  El evento <code class="font-mono font-semibold">order.created</code> se publicó en RabbitMQ y fue recibido por el microservicio
+                  <span class="font-semibold">notifications</span>. Recibirás tu recibo de compra en tu correo electrónico corporativo registrado.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recommendation Feedback -->
+          <div class="mt-4 rounded-xl border border-purple-200 bg-purple-50 p-4">
+            <div class="flex items-start gap-3">
+              <div class="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-purple-100 text-purple-600">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <div class="text-xs text-purple-900 leading-relaxed">
+                <p class="font-bold">Pipeline de Recomendaciones IA Activado</p>
+                <p class="mt-0.5 text-purple-700">
+                  El microservicio <span class="font-semibold">recommendation</span> se encuentra analizando los artículos adquiridos en segundo plano
+                  mediante <span class="font-semibold">Mistral AI</span> para generar tus sugerencias personalizadas de camisetas.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-6 flex justify-center gap-4">
+            <a routerLink="/catalog" (click)="resetCheckout()" class="rounded-xl bg-slate-900 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-blue-600">
+              Seguir Comprando
+            </a>
+            <a routerLink="/perfil" class="rounded-xl border border-slate-300 bg-white px-6 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
+              Ir a Mi Perfil
+            </a>
+          </div>
+
+          <!-- Post-Purchase AI Recommendations -->
+          <div class="mt-8 border-t border-slate-100 pt-6">
+            <app-recommendations />
+          </div>
+        </div>
       } @else {
         <!-- Empty Cart -->
         <div class="rounded-2xl border border-slate-200 bg-white py-20 text-center shadow-sm">
@@ -171,6 +237,9 @@ export class CartComponent {
   /** Estado de procesamiento del checkout */
   readonly checkingOut = signal<boolean>(false);
 
+  /** Información del pedido finalizado con éxito */
+  readonly checkoutSuccess = signal<{ orderId?: string; status?: string } | null>(null);
+
   constructor(readonly cartService: CartService) {}
 
   /** Actualiza la cantidad de un ítem */
@@ -188,15 +257,22 @@ export class CartComponent {
     this.checkingOut.set(true);
 
     this.cartService.checkout().subscribe({
-      next: () => {
+      next: (response) => {
         this.cartService.clearCart();
         this.checkingOut.set(false);
-        // TODO: navegar a una vista de confirmación
+        this.checkoutSuccess.set({
+          orderId: response?.orderId || 'Generada',
+          status: response?.status || 'ACCEPTED',
+        });
       },
       error: (err) => {
         console.error('Error al procesar el pedido:', err);
         this.checkingOut.set(false);
       },
     });
+  }
+
+  resetCheckout(): void {
+    this.checkoutSuccess.set(null);
   }
 }

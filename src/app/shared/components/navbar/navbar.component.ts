@@ -2,6 +2,7 @@ import { Component, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../features/auth/services/auth.service';
 import { CartService } from '../../../features/cart/services/cart.service';
+import { NotificationCenterComponent } from '../../../features/notifications/notification-center.component';
 
 /**
  * Componente de barra de navegación principal.
@@ -10,6 +11,7 @@ import { CartService } from '../../../features/cart/services/cart.service';
  * - Logo con gradiente de Camisetas360
  * - Navegación con RouterLink activo
  * - Badge de cantidad del carrito (reactivo)
+ * - Botón de centro de notificaciones (RabbitMQ / SMTP)
  * - Botón login/logout dinámico
  * - Menú hamburguesa responsive
  * - Efecto glassmorphism en scroll
@@ -17,7 +19,7 @@ import { CartService } from '../../../features/cart/services/cart.service';
 @Component({
   selector: 'app-navbar',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink, RouterLinkActive, NotificationCenterComponent],
   template: `
     <nav class="sticky top-0 z-50 border-b border-white/10 bg-slate-900/95 backdrop-blur-xl">
       <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -63,6 +65,22 @@ import { CartService } from '../../../features/cart/services/cart.service';
 
           <!-- Right Section -->
           <div class="flex items-center gap-3">
+            <!-- Notification Bell Button -->
+            <button
+              (click)="toggleNotificationCenter()"
+              class="relative rounded-lg p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
+              title="Centro de Notificaciones"
+              aria-label="Abrir centro de notificaciones"
+            >
+              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              @if (authService.isLoggedIn()) {
+                <span class="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-slate-900"></span>
+              }
+            </button>
+
             @if (authService.isLoggedIn()) {
               <!-- User Info -->
               <div class="hidden items-center gap-3 md:flex">
@@ -146,12 +164,20 @@ import { CartService } from '../../../features/cart/services/cart.service';
           </div>
         </div>
       }
+
+      <!-- Notification Center Panel -->
+      @if (showNotificationCenter()) {
+        <app-notification-center (close)="closeNotificationCenter()" />
+      }
     </nav>
   `,
 })
 export class NavbarComponent {
   /** Estado del menú móvil */
   readonly mobileMenuOpen = signal<boolean>(false);
+
+  /** Estado del panel de notificaciones */
+  readonly showNotificationCenter = signal<boolean>(false);
 
   constructor(
     readonly authService: AuthService,
@@ -164,5 +190,13 @@ export class NavbarComponent {
 
   closeMobileMenu(): void {
     this.mobileMenuOpen.set(false);
+  }
+
+  toggleNotificationCenter(): void {
+    this.showNotificationCenter.set(!this.showNotificationCenter());
+  }
+
+  closeNotificationCenter(): void {
+    this.showNotificationCenter.set(false);
   }
 }

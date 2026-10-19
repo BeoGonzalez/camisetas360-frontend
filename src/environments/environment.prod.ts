@@ -4,7 +4,7 @@ export const environment = {
   frontendGateway: 'https://33tvg6ofya.execute-api.us-east-1.amazonaws.com',
 
   // Renombrado a apiGateway para que tus servicios de Angular no fallen en el build
-  apiGateway: 'https://4rz77xxe8e.execute-api.us-east-1.amazonaws.com',
+  apiGateway: 'https://xz8yr05wy8.execute-api.us-east-1.amazonaws.com',
 
   endpoints: {
     catalog: '/api/v1/catalog',
@@ -24,6 +24,7 @@ export const environment = {
       'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Catalog.Read',
       'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Checkout.Create',
       'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Orders.Read',
+      'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Notifications.Send',
     ],
   },
 };
