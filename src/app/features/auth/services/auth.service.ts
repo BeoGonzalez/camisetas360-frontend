@@ -34,6 +34,27 @@ export class AuthService {
       .join('');
   });
 
+  /** Signal reactivo: roles del usuario extraídos de las claims del token */
+  readonly userRoles = computed<string[]>(() => {
+    const activeAccount = this.msalService.instance.getActiveAccount();
+    const claims = activeAccount?.idTokenClaims as Record<string, any> | undefined;
+    if (claims && Array.isArray(claims['roles'])) {
+      return claims['roles'] as string[];
+    }
+    return [];
+  });
+
+  /** Signal reactivo: indica si el usuario posee el rol ADMIN */
+  readonly isAdmin = computed<boolean>(() => {
+    return this.userRoles().includes('ADMIN');
+  });
+
+  /** Signal reactivo: correo electrónico del usuario autenticado */
+  readonly userEmail = computed<string>(() => {
+    const activeAccount = this.msalService.instance.getActiveAccount();
+    return activeAccount?.username || '';
+  });
+
   private readonly apiUrl = `${environment.apiGateway}${environment.endpoints.auth}`;
 
   constructor(

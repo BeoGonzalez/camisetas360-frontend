@@ -123,6 +123,18 @@ export function MSALInterceptorConfigFactory():
     ]
   );
 
+  /*
+   * Notificaciones
+   *
+   * POST /api/v1/notifications/email
+   */
+  protectedResourceMap.set(
+    `${environment.apiGateway}${environment.endpoints.notifications}/*`,
+    [
+      `${apiScope}/Notifications.Send`,
+    ]
+  );
+
   return {
     interactionType: InteractionType.Redirect,
     protectedResourceMap,

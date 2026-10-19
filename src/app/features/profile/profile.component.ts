@@ -1,17 +1,20 @@
 import { Component, OnInit, signal } from '@angular/core';
 import { AuthService } from '../auth/services/auth.service';
 import { UserProfile } from '../../core/models/user-profile.model';
+import { RecommendationsComponent } from '../recommendations/recommendations.component';
 
 /**
  * Componente de perfil del usuario autenticado.
  *
  * Vista protegida por authGuard que consume el endpoint
  * /api/v1/auth/profile y renderiza la información del usuario:
- * nombre, correo e identificador.
+ * nombre, correo e identificador, complementada con el módulo
+ * de recomendaciones personalizadas de IA.
  */
 @Component({
   selector: 'app-profile',
   standalone: true,
+  imports: [RecommendationsComponent],
   template: `
     <div class="mx-auto max-w-2xl">
       <!-- Header -->
@@ -117,6 +120,9 @@ import { UserProfile } from '../../core/models/user-profile.model';
             </div>
           </div>
         </div>
+
+        <!-- Sección de recomendaciones de IA vinculadas al usuario -->
+        <app-recommendations />
       }
     </div>
   `,
