@@ -167,15 +167,15 @@ export class AuthService {
   /**
    * Obtiene el perfil del usuario desde el backend o del usuario Cognito.
    */
-  getProfile(): Observable<UserProfile> {
+  getProfile(): Observable<any> {
     if (this.cognitoAuth.isLoggedIn()) {
       const u = this.cognitoAuth.currentUser();
       return of({
         id: u?.sub || 'cognito-user',
-        name: u?.name || 'Usuario Cognito',
-        email: u?.email || '',
-        message: '',
-      } as unknown as UserProfile);
+        nombre: u?.name || 'Usuario Cognito',
+        correo: u?.email || '',
+        identificador: u?.username || u?.email || '',
+      });
     }
     return this.http.get<UserProfile>(`${this.apiUrl}/profile`)
       .pipe(catchError(this.handleError));
