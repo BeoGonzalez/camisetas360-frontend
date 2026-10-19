@@ -1,5 +1,5 @@
 import { Component, OnInit, signal } from '@angular/core';
-import { AuthService } from '../auth/services/auth.service';
+import { AuthService } from '../../core/services/auth.service';
 import { UserProfile } from '../../core/models/user-profile.model';
 import { RecommendationsComponent } from '../recommendations/recommendations.component';
 
@@ -137,7 +137,7 @@ export class ProfileComponent implements OnInit {
   /** Mensaje de error */
   readonly error = signal<string>('');
 
-  constructor(readonly authService: AuthService) {}
+  constructor(readonly authService: AuthService) { }
 
   ngOnInit(): void {
     this.loadProfile();

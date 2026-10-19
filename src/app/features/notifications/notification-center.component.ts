@@ -2,7 +2,7 @@ import { Component, EventEmitter, Output, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { NotificationService } from '../../core/services/notification.service';
-import { AuthService } from '../auth/services/auth.service';
+import { AuthService } from '../../core/services/auth.service';
 import { SendEmailRequest } from '../../core/models/notification.model';
 
 @Component({

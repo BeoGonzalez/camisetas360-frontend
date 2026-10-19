@@ -2,9 +2,9 @@ import { Injectable, signal, computed, inject } from '@angular/core';
 import { MsalService } from '@azure/msal-angular';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, of, catchError, throwError } from 'rxjs';
-import { environment } from '../../../../environments/environment';
-import { UserProfile } from '../../../core/models/auth.model';
-import { CognitoAuthService } from '../../../core/services/cognito-auth.service';
+import { environment } from '../../../environments/environment';
+import { UserProfile } from '../models/auth.model';
+import { CognitoAuthService } from './cognito-auth.service';
 
 /**
  * Servicio de autenticación unificado que encapsula Azure Entra ID (MSAL),

@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { NavbarComponent } from './shared/components/navbar/navbar.component';
 import { FooterComponent } from './shared/components/footer/footer.component';
-import { AuthService } from './features/auth/services/auth.service';
+import { AuthService } from './core/services/auth.service';
 
 /**
  * Componente raíz de la aplicación.
@@ -34,7 +34,7 @@ import { AuthService } from './features/auth/services/auth.service';
   `,
 })
 export class AppComponent implements OnInit {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   ngOnInit(): void {
     // AuthService se encarga de procesar la respuesta de redirección

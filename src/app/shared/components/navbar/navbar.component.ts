@@ -1,6 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
-import { AuthService } from '../../../features/auth/services/auth.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { CartService } from '../../../features/cart/services/cart.service';
 import { NotificationCenterComponent } from '../../../features/notifications/notification-center.component';
 
@@ -182,7 +182,7 @@ export class NavbarComponent {
   constructor(
     readonly authService: AuthService,
     readonly cartService: CartService
-  ) {}
+  ) { }
 
   toggleMobileMenu(): void {
     this.mobileMenuOpen.set(!this.mobileMenuOpen());

@@ -1,7 +1,7 @@
 import { Component, signal, inject, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
-import { AuthService } from './services/auth.service';
+import { AuthService } from '../../core/services/auth.service';
 import { CognitoAuthService } from '../../core/services/cognito-auth.service';
 import { environment } from '../../../environments/environment';
 
