@@ -26,11 +26,14 @@ FROM nginx:alpine
 # Eliminar configuración default de Nginx
 RUN rm -f /etc/nginx/conf.d/default.conf
 
+# Eliminar el contenido por defecto de Nginx (el "Welcome to nginx")
+RUN rm -rf /usr/share/nginx/html/*
+
 # Copiar configuración propia desde la raíz
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copiar Angular compilado
-COPY --from=builder /app/dist/camisetas360-frontend /usr/share/nginx/html
+# Copiar solo la aplicación compilada (la carpeta browser)
+COPY --from=builder /app/dist/camisetas360-frontend/browser/ /usr/share/nginx/html/
 
 EXPOSE 80
 
