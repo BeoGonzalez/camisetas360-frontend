@@ -9,7 +9,6 @@ import { UserProfile } from '../models/auth.model';
 })
 export class AuthService {
   private http = inject(HttpClient);
-  // Using the exact route requested
   private apiUrl = `${environment.apiGateway}/api/v1/auth`;
 
   /**
@@ -34,6 +33,47 @@ export class AuthService {
   getPublicStatus(): Observable<any> {
     return this.http.get<any>(`${this.apiUrl}/public/status`)
       .pipe(catchError(this.handleError));
+  }
+
+  // ==========================================
+  // MÉTODOS REQUERIDOS POR EL INTERCEPTOR
+  // ==========================================
+
+  /**
+   * Guarda los tokens de acceso e identidad en el almacenamiento local
+   */
+  setTokens(accessToken: string, idToken: string): void {
+    localStorage.setItem('access_token', accessToken);
+    localStorage.setItem('id_token', idToken);
+  }
+
+  /**
+   * Retorna el Access Token actual
+   */
+  accessToken(): string | null {
+    return localStorage.getItem('access_token');
+  }
+
+  /**
+   * Retorna el ID Token actual
+   */
+  idToken(): string | null {
+    return localStorage.getItem('id_token');
+  }
+
+  /**
+   * Verifica si el usuario cuenta con una sesión activa
+   */
+  isLoggedIn(): boolean {
+    return !!this.accessToken();
+  }
+
+  /**
+   * Cierra la sesión limpiando el almacenamiento
+   */
+  logout(): void {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('id_token');
   }
 
   private handleError(error: HttpErrorResponse) {
