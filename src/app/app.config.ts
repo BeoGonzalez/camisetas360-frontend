@@ -96,6 +96,10 @@ export function MSALInterceptorConfigFactory():
     `${environment.apiGateway}${environment.endpoints.notifications}/*`,
     [`${apiScope}/Notifications.Send`]
   );
+  protectedResourceMap.set(
+    `${environment.apiGateway}${environment.endpoints.pago}/*`,
+    [`${apiScope}/Checkout.Create`]
+  );
 
   return {
     interactionType: InteractionType.Redirect,

@@ -1,0 +1,12 @@
+{
+  "/api/v1/pago": {
+    "target": "http://localhost:8087",
+    "secure": false,
+    "changeOrigin": true
+  },
+  "/actuator": {
+    "target": "http://localhost:8087",
+    "secure": false,
+    "changeOrigin": true
+  }
+}

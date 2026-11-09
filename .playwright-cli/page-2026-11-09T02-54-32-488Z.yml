@@ -1,0 +1,42 @@
+- generic [ref=e3]:
+  - navigation [ref=e5]:
+    - generic [ref=e7]:
+      - link "C3 CAMISETAS360" [ref=e8] [cursor=pointer]:
+        - /url: /catalog
+        - generic [ref=e9]: C3
+        - generic [ref=e10]: CAMISETAS360
+      - link "Catálogo" [ref=e12] [cursor=pointer]:
+        - /url: /catalog
+      - generic [ref=e13]:
+        - button "Abrir centro de notificaciones" [ref=e14]
+        - link "Iniciar Sesión" [ref=e17] [cursor=pointer]:
+          - /url: /auth/login
+  - main [ref=e18]:
+    - generic [ref=e24]:
+      - heading "Catálogo de Camisetas" [level=1] [ref=e25]
+      - paragraph [ref=e26]: Explora las camisetas disponibles en nuestro catálogo
+  - contentinfo [ref=e85]:
+    - generic [ref=e86]:
+      - generic [ref=e87]:
+        - generic [ref=e88]:
+          - generic [ref=e89]:
+            - generic [ref=e90]: C3
+            - generic [ref=e91]: CAMISETAS360
+          - paragraph [ref=e92]: Tu tienda de camisetas de fútbol. Las 5 grandes ligas en un solo lugar.
+        - generic [ref=e93]:
+          - heading "Navegación" [level=4] [ref=e94]
+          - list [ref=e95]:
+            - listitem [ref=e96]:
+              - link "Catálogo" [ref=e97] [cursor=pointer]:
+                - /url: /catalog
+            - listitem [ref=e98]:
+              - link "Carrito" [ref=e99] [cursor=pointer]:
+                - /url: /carrito
+            - listitem [ref=e100]:
+              - link "Mi Perfil" [ref=e101] [cursor=pointer]:
+                - /url: /perfil
+        - generic [ref=e102]:
+          - heading "Contacto" [level=4] [ref=e103]
+          - list [ref=e104]:
+            - listitem [ref=e105]: soporte@camisetas360.com
+      - paragraph [ref=e109]: © 2026 Camisetas360. Todos los derechos reservados.

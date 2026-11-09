@@ -199,7 +199,10 @@ import { RecommendationsComponent } from '../recommendations/recommendations.com
             </div>
           </div>
 
-          <div class="mt-6 flex justify-center gap-4">
+          <div class="mt-6 flex flex-wrap justify-center gap-4">
+            <a [routerLink]="['/pago/checkout', checkoutSuccess()!.orderId]" class="rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700">
+              Pagar con Webpay Plus &rarr;
+            </a>
             <a routerLink="/catalog" (click)="resetCheckout()" class="rounded-xl bg-slate-900 px-6 py-2.5 text-sm font-bold text-white transition hover:bg-blue-600">
               Seguir Comprando
             </a>

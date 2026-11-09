@@ -1,0 +1,14 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:4200",
+      "localStorage": [
+        {
+          "name": "c360_cognito_session",
+          "value": "{\"user\":{\"username\":\"admin\",\"email\":\"admin@camisetas360.test\",\"name\":\"Administrador Demo\",\"sub\":\"sub-admin-123\",\"roles\":[\"CUSTOMER\",\"ADMIN\"]},\"accessToken\":\"e2e-test-token-valid\",\"idToken\":\"e2e-test-id-token\"}"
+        }
+      ]
+    }
+  ]
+}
