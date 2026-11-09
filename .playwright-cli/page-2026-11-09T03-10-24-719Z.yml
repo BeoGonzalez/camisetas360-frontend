@@ -1,0 +1,61 @@
+- generic [ref=e3]:
+  - navigation [ref=e5]:
+    - generic [ref=e7]:
+      - link "C3 CAMISETAS360" [ref=e8] [cursor=pointer]:
+        - /url: /catalog
+        - generic [ref=e9]: C3
+        - generic [ref=e10]: CAMISETAS360
+      - link "Catálogo" [ref=e12] [cursor=pointer]:
+        - /url: /catalog
+      - generic [ref=e13]:
+        - button "Abrir centro de notificaciones" [ref=e14]
+        - link "Iniciar Sesión" [ref=e17] [cursor=pointer]:
+          - /url: /auth/login
+  - main [ref=e18]:
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - generic [ref=e23]:
+          - heading "CAMISETAS 360" [level=1] [ref=e27]
+          - paragraph [ref=e28]: Plataforma de E-commerce y Microservicios
+        - generic [ref=e30]:
+          - generic [ref=e31]:
+            - heading "Iniciar Sesión con AWS Cognito" [level=3] [ref=e32]
+            - paragraph [ref=e33]: Ingresa con tus credenciales de usuario de Amazon Cognito
+          - generic [ref=e34]:
+            - generic [ref=e35]:
+              - generic [ref=e36]: Correo Electrónico
+              - textbox "usuario@camisetas360.com" [ref=e37]
+            - generic [ref=e38]:
+              - generic [ref=e39]: Contraseña
+              - textbox "••••••••••••" [ref=e40]: Password123!
+            - button "Iniciar Sesión con Cognito" [ref=e41]
+          - button "Acceso rápido (Usuario Demo Cognito)" [ref=e45]
+          - generic [ref=e47]: Otras Opciones
+          - button "Portal Cognito Hosted UI" [ref=e50]
+          - button "Acceso Microsoft Entra ID" [ref=e54]
+      - paragraph [ref=e61]: Camisetas360 · AWS Academy Learner Lab · ECS Fargate & Lambda Serverless
+  - contentinfo [ref=e63]:
+    - generic [ref=e64]:
+      - generic [ref=e65]:
+        - generic [ref=e66]:
+          - generic [ref=e67]:
+            - generic [ref=e68]: C3
+            - generic [ref=e69]: CAMISETAS360
+          - paragraph [ref=e70]: Tu tienda de camisetas de fútbol. Las 5 grandes ligas en un solo lugar.
+        - generic [ref=e71]:
+          - heading "Navegación" [level=4] [ref=e72]
+          - list [ref=e73]:
+            - listitem [ref=e74]:
+              - link "Catálogo" [ref=e75] [cursor=pointer]:
+                - /url: /catalog
+            - listitem [ref=e76]:
+              - link "Carrito" [ref=e77] [cursor=pointer]:
+                - /url: /carrito
+            - listitem [ref=e78]:
+              - link "Mi Perfil" [ref=e79] [cursor=pointer]:
+                - /url: /perfil
+        - generic [ref=e80]:
+          - heading "Contacto" [level=4] [ref=e81]
+          - list [ref=e82]:
+            - listitem [ref=e83]: soporte@camisetas360.com
+      - paragraph [ref=e87]: © 2026 Camisetas360. Todos los derechos reservados.

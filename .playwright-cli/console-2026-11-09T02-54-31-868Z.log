@@ -1,0 +1,4 @@
+[     570ms] [LOG] [AuthInterceptor] Evaluando URL: https://xz8yr05wy8.execute-api.us-east-1.amazonaws.com/api/v1/catalog/products -> ¿Es API?: true @ http://127.0.0.1:4200/main-X2W6ALYB.js:0
+[     570ms] [LOG] [AuthInterceptor] ¿Usuario reconocido como logueado?: false @ http://127.0.0.1:4200/main-X2W6ALYB.js:0
+[     570ms] [LOG] [AuthInterceptor] ¿Existe Access Token en memoria?: false @ http://127.0.0.1:4200/main-X2W6ALYB.js:0
+[     571ms] [LOG] [AuthInterceptor] Evaluando URL: https://xz8yr05wy8.execute-api.us-east-1.amazonaws.com/api/v1/catalog/products -> ¿Es API?: true @ http://127.0.0.1:4200/main-X2W6ALYB.js:0

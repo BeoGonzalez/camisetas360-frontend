@@ -60,6 +60,14 @@ import { NotificationCenterComponent } from '../../../features/notifications/not
                  class="rounded-lg px-4 py-2 text-sm font-medium text-slate-300 transition-all duration-200 hover:bg-white/10 hover:text-white">
                 Mi Perfil
               </a>
+
+              @if (authService.isAdmin()) {
+                <a routerLink="/pago/alertas"
+                   routerLinkActive="bg-white/10 text-white"
+                   class="rounded-lg px-4 py-2 text-sm font-medium text-red-400 transition-all duration-200 hover:bg-white/10 hover:text-red-300">
+                  Alertas Antifraude
+                </a>
+              }
             }
           </div>
 
@@ -150,6 +158,15 @@ import { NotificationCenterComponent } from '../../../features/notifications/not
                  class="block rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white">
                 Mi Perfil
               </a>
+
+              @if (authService.isAdmin()) {
+                <a routerLink="/pago/alertas"
+                   routerLinkActive="bg-white/10 text-white"
+                   (click)="closeMobileMenu()"
+                   class="block rounded-lg px-4 py-3 text-sm font-medium text-red-400 transition hover:bg-white/10 hover:text-red-300">
+                  Alertas Antifraude
+                </a>
+              }
 
               <!-- User Info (Mobile) -->
               <div class="mt-2 border-t border-white/10 pt-3">

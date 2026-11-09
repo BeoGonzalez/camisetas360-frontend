@@ -3,7 +3,7 @@ import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { NotificationCenterComponent } from './notification-center.component';
 import { NotificationService } from '../../core/services/notification.service';
-import { AuthService } from '../auth/services/auth.service';
+import { AuthService } from '../../core/services/auth.service';
 
 describe('NotificationCenterComponent', () => {
   let authServiceMock: any;

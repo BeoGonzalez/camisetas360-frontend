@@ -30,6 +30,11 @@ export const routes: Routes = [
       import('./features/profile/profile.routes').then((m) => m.PROFILE_ROUTES),
     canActivate: [authGuard],
   },
+  {
+    path: 'pago',
+    loadChildren: () =>
+      import('./features/pago/pago.routes').then((m) => m.PAGO_ROUTES),
+  },
   { path: '', redirectTo: 'catalog', pathMatch: 'full' },
   { path: '**', redirectTo: 'catalog' },
 ];

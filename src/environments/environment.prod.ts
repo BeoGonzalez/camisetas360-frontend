@@ -14,6 +14,7 @@ export const environment = {
     recommendation: '/api/v1/recommendation',
     cognitoLogin: '/api/v1/auth/cognito/login',
     cognitoRegister: '/api/v1/auth/cognito/register',
+    pago: '/api/v1/pago',
   },
 
   azure: {
