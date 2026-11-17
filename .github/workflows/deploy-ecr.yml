@@ -261,22 +261,164 @@ jobs:
       # revisión nueva de la task definition con la imagen recién
       # publicada y se actualiza el servicio para que la use.
       # ========================================
-      - name: Verificar recursos de ECS
+      # ========================================
+      # PROVISIONAR ECS SI FALTA
+      #
+      # El Learner Lab se reinicia o cambia de cuenta y se pierde la
+      # infraestructura. Este paso es idempotente: crea solo lo que no
+      # existe (cluster, log group, task definition, security group y
+      # servicio Fargate) y deja intacto lo que ya está (por ejemplo, lo
+      # creado por Terraform). Red: VPC por defecto con IP pública, salvo
+      # que se definan las variables ECS_SUBNETS / ECS_SECURITY_GROUP.
+      # ========================================
+      - name: Provisionar recursos de ECS si no existen
+        env:
+          IMAGE_URI: ${{ steps.push.outputs.uri }}
+          # Opcionales (Settings > Variables): subnets separadas por coma y SG existente.
+          ECS_SUBNETS: ${{ vars.ECS_SUBNETS }}
+          ECS_SECURITY_GROUP: ${{ vars.ECS_SECURITY_GROUP }}
+          LOG_GROUP: /ecs/frontend-task
+          CONTAINER_PORT: '80'
         run: |
           set -euo pipefail
 
-          STATUS="$(
-            aws ecs describe-services \
-              --cluster "$ECS_CLUSTER" \
-              --services "$ECS_SERVICE" \
-              --region "$AWS_REGION" \
-              --query 'services[0].status' \
-              --output text
-          )"
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          # El Learner Lab no permite crear roles IAM; LabRole ya existe y sirve
+          # como execution role (pull de ECR + CloudWatch Logs).
+          LAB_ROLE_ARN="arn:aws:iam::${ACCOUNT_ID}:role/LabRole"
 
-          if [ "$STATUS" != "ACTIVE" ]; then
-            echo "::error::El servicio $ECS_SERVICE no está ACTIVE (estado: $STATUS)."
+          # ---------- Cluster ----------
+          CLUSTER_STATUS="$(aws ecs describe-clusters --clusters "$ECS_CLUSTER" \
+            --query 'clusters[0].status' --output text)"
+          if [ "$CLUSTER_STATUS" != "ACTIVE" ]; then
+            echo "Creando cluster $ECS_CLUSTER..."
+            aws ecs create-cluster --cluster-name "$ECS_CLUSTER" \
+              --capacity-providers FARGATE FARGATE_SPOT \
+              --no-cli-pager >/dev/null
+          else
+            echo "Cluster $ECS_CLUSTER ya existe."
+          fi
+
+          # ---------- Log group ----------
+          if [ "$(aws logs describe-log-groups --log-group-name-prefix "$LOG_GROUP" \
+                --query "length(logGroups[?logGroupName=='$LOG_GROUP'])" --output text)" = "0" ]; then
+            echo "Creando log group $LOG_GROUP..."
+            aws logs create-log-group --log-group-name "$LOG_GROUP"
+            aws logs put-retention-policy --log-group-name "$LOG_GROUP" --retention-in-days 7
+          fi
+
+          # ---------- Task definition ----------
+          # Si no existe, se registra una base con la imagen recién publicada.
+          # Los pasos siguientes generan igual una revisión nueva con esa imagen.
+          if ! aws ecs describe-task-definition --task-definition "$TASK_FAMILY" >/dev/null 2>&1; then
+            echo "Registrando task definition base $TASK_FAMILY..."
+            jq -n \
+              --arg family "$TASK_FAMILY" \
+              --arg role "$LAB_ROLE_ARN" \
+              --arg name "$CONTAINER_NAME" \
+              --arg image "$IMAGE_URI" \
+              --arg logGroup "$LOG_GROUP" \
+              --arg region "$AWS_REGION" \
+              --argjson port "$CONTAINER_PORT" \
+              '{
+                family: $family,
+                networkMode: "awsvpc",
+                requiresCompatibilities: ["FARGATE"],
+                cpu: "256",
+                memory: "512",
+                executionRoleArn: $role,
+                taskRoleArn: $role,
+                runtimePlatform: { cpuArchitecture: "X86_64", operatingSystemFamily: "LINUX" },
+                containerDefinitions: [{
+                  name: $name,
+                  image: $image,
+                  essential: true,
+                  portMappings: [{ containerPort: $port, protocol: "tcp" }],
+                  healthCheck: {
+                    command: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health || exit 1"],
+                    interval: 30, timeout: 5, retries: 3, startPeriod: 10
+                  },
+                  logConfiguration: {
+                    logDriver: "awslogs",
+                    options: {
+                      "awslogs-group": $logGroup,
+                      "awslogs-region": $region,
+                      "awslogs-stream-prefix": "frontend"
+                    }
+                  }
+                }]
+              }' > base-task-definition.json
+            aws ecs register-task-definition \
+              --cli-input-json file://base-task-definition.json \
+              --no-cli-pager >/dev/null
+          else
+            echo "Task definition $TASK_FAMILY ya existe."
+          fi
+
+          # ---------- Servicio ----------
+          SERVICE_STATUS="$(aws ecs describe-services --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE" --query 'services[0].status' --output text)"
+
+          if [ "$SERVICE_STATUS" = "DRAINING" ]; then
+            echo "::error::El servicio $ECS_SERVICE se está eliminando (DRAINING). Reintenta en unos minutos."
             exit 1
+          fi
+
+          if [ "$SERVICE_STATUS" != "ACTIVE" ]; then
+            echo "El servicio $ECS_SERVICE no existe (estado: $SERVICE_STATUS). Creándolo..."
+
+            # Subnets: variable ECS_SUBNETS o las subnets por defecto de la VPC por defecto.
+            if [ -n "${ECS_SUBNETS:-}" ]; then
+              SUBNETS="$ECS_SUBNETS"
+              VPC_ID="$(aws ec2 describe-subnets --subnet-ids "${SUBNETS%%,*}" \
+                --query 'Subnets[0].VpcId' --output text)"
+            else
+              VPC_ID="$(aws ec2 describe-vpcs --filters Name=is-default,Values=true \
+                --query 'Vpcs[0].VpcId' --output text)"
+              if [ "$VPC_ID" = "None" ]; then
+                echo "::error::No hay VPC por defecto. Define la variable ECS_SUBNETS (y opcionalmente ECS_SECURITY_GROUP)."
+                exit 1
+              fi
+              SUBNETS="$(aws ec2 describe-subnets \
+                --filters Name=vpc-id,Values="$VPC_ID" Name=default-for-az,Values=true \
+                --query 'Subnets[].SubnetId' --output text | tr '\t' ',')"
+            fi
+            if [ -z "$SUBNETS" ] || [ "$SUBNETS" = "None" ]; then
+              echo "::error::No se encontraron subnets para el servicio."
+              exit 1
+            fi
+
+            # Security group: variable ECS_SECURITY_GROUP o uno propio con HTTP abierto.
+            if [ -n "${ECS_SECURITY_GROUP:-}" ]; then
+              SG_ID="$ECS_SECURITY_GROUP"
+            else
+              SG_NAME="${ECS_SERVICE}-sg"
+              SG_ID="$(aws ec2 describe-security-groups \
+                --filters Name=vpc-id,Values="$VPC_ID" Name=group-name,Values="$SG_NAME" \
+                --query 'SecurityGroups[0].GroupId' --output text)"
+              if [ "$SG_ID" = "None" ]; then
+                echo "Creando security group $SG_NAME..."
+                SG_ID="$(aws ec2 create-security-group --group-name "$SG_NAME" \
+                  --description "HTTP publico para $ECS_SERVICE" --vpc-id "$VPC_ID" \
+                  --query GroupId --output text)"
+                aws ec2 authorize-security-group-ingress --group-id "$SG_ID" \
+                  --protocol tcp --port "$CONTAINER_PORT" --cidr 0.0.0.0/0 >/dev/null
+              fi
+            fi
+
+            echo "VPC: $VPC_ID | Subnets: $SUBNETS | SG: $SG_ID"
+            aws ecs create-service \
+              --cluster "$ECS_CLUSTER" \
+              --service-name "$ECS_SERVICE" \
+              --task-definition "$TASK_FAMILY" \
+              --desired-count 1 \
+              --launch-type FARGATE \
+              --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG_ID],assignPublicIp=ENABLED}" \
+              --deployment-configuration "maximumPercent=200,minimumHealthyPercent=100,deploymentCircuitBreaker={enable=true,rollback=true}" \
+              --no-cli-pager >/dev/null
+            echo "Servicio $ECS_SERVICE creado."
+          else
+            echo "Servicio $ECS_SERVICE ya existe."
           fi
 
       - name: Descargar task definition actual
@@ -489,9 +631,25 @@ jobs:
             exit 1
           fi
 
+          # Sin ALB, cada tarea tiene su IP pública (cambia en cada deploy).
+          PUBLIC_IP="sin IP pública"
+          TASK_ARN="$(aws ecs list-tasks --cluster "$ECS_CLUSTER" --service-name "$ECS_SERVICE" \
+            --desired-status RUNNING --query 'taskArns[0]' --output text)"
+          if [ -n "$TASK_ARN" ] && [ "$TASK_ARN" != "None" ]; then
+            ENI_ID="$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$TASK_ARN" \
+              --query "tasks[0].attachments[0].details[?name=='networkInterfaceId'].value | [0]" \
+              --output text)"
+            if [ -n "$ENI_ID" ] && [ "$ENI_ID" != "None" ]; then
+              PUBLIC_IP="$(aws ec2 describe-network-interfaces --network-interface-ids "$ENI_ID" \
+                --query 'NetworkInterfaces[0].Association.PublicIp' --output text)"
+            fi
+          fi
+          echo "URL de la tarea: http://$PUBLIC_IP"
+
           {
             echo "## Camisetas360 Frontend"
             echo
+            echo "- URL: http://$PUBLIC_IP"
             echo "- Cluster: $ECS_CLUSTER (Fargate)"
             echo "- Servicio: $ECS_SERVICE"
             echo "- Imagen: \`$IMAGE_URI\`"
