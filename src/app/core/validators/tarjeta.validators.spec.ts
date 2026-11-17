@@ -8,6 +8,8 @@ import {
   cvvValidator,
   detectarMarcaTarjeta,
   formatearPan,
+  esTarjetaPruebaTransbank,
+  TARJETAS_PRUEBA_TRANSBANK,
 } from './tarjeta.validators';
 
 describe('tarjeta.validators', () => {
@@ -35,6 +37,55 @@ describe('tarjeta.validators', () => {
       expect(validator(validControl)).toBeNull();
       expect(validator(invalidControl)).toEqual({ luhnInvalido: true });
       expect(validator(emptyControl)).toBeNull(); // control vacío no falla luhn (eso lo hace required)
+    });
+  });
+
+  describe('tarjetas de prueba de Transbank (las que reconoce ms-pagos)', () => {
+    const aceptaPrueba = luhnValidator({ aceptarTarjetasPrueba: true });
+
+    it('son exactamente las 8 documentadas, con su resultado esperado', () => {
+      expect(TARJETAS_PRUEBA_TRANSBANK.map((t) => [t.numero, t.autorizada])).toEqual([
+        ['4051885600446623', true],
+        ['370000000002032', true],
+        ['5186059559590568', false],
+        ['4051884239937763', true],
+        ['4511346660037060', true],
+        ['5186008541233829', false],
+        ['4051886000056590', true],
+        ['5186174110629480', false],
+      ]);
+    });
+
+    it.each(TARJETAS_PRUEBA_TRANSBANK.map((t) => [t.tipo, t.numero] as const))(
+      '%s %s es aceptada por el formulario (con y sin espacios)',
+      (_tipo, numero) => {
+        expect(aceptaPrueba(new FormControl(numero))).toBeNull();
+        expect(aceptaPrueba(new FormControl(formatearPan(numero)))).toBeNull();
+      },
+    );
+
+    it('Redcompra 4511 3466 6003 7060 NO pasa Luhn: solo se acepta por ser de prueba', () => {
+      expect(luhnCheck('4511346660037060')).toBe(false);
+      expect(luhnValidator()(new FormControl('4511346660037060'))).toEqual({ luhnInvalido: true });
+      expect(esTarjetaPruebaTransbank('4511 3466 6003 7060')).toBe(true);
+    });
+
+    it('la excepción no abre la puerta a otros números inválidos', () => {
+      expect(aceptaPrueba(new FormControl('4511346660037062'))).toEqual({ luhnInvalido: true });
+      expect(aceptaPrueba(new FormControl('1234567812345678'))).toEqual({ luhnInvalido: true });
+    });
+
+    it.each([
+      ['4051885600446623', 'VISA'],
+      ['370000000002032', 'AMEX'],
+      ['5186059559590568', 'MASTERCARD'],
+      ['4511346660037060', 'VISA'],
+    ])('detecta la marca de %s como %s', (numero, marca) => {
+      expect(detectarMarcaTarjeta(numero)).toBe(marca);
+    });
+
+    it('AMEX de 15 dígitos se agrupa sin perder dígitos', () => {
+      expect(formatearPan('370000000002032').replace(/\s/g, '')).toBe('370000000002032');
     });
   });
 

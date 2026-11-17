@@ -13,6 +13,22 @@ const ADMIN_SESSION = JSON.stringify({
   idToken: 'e2e-test-id-token',
 });
 
+// requestId del checkout usado como ordenId de pago (SUPUESTO, ver CheckoutTrackerService).
+const COMPRAS = JSON.stringify(
+  [
+    ['00000000-0000-0000-0000-000000000001', 15990],
+    ['11111111-1111-1111-1111-111111111111', 15990],
+    ['22222222-2222-2222-2222-222222222222', 25000],
+    ['33333333-3333-3333-3333-333333333333', 15990],
+  ].map(([requestId, montoPago]) => ({
+    requestId,
+    totalAmount: montoPago,
+    montoPago,
+    createdAt: '2026-11-10T00:00:00Z',
+    estado: 'ENCONTRADO',
+  })),
+);
+
 // Generador de PAN válido según algoritmo de Luhn (16 dígitos)
 function generarPanValido(prefix = '4532'): string {
   let pan15 = prefix;
@@ -34,16 +50,33 @@ function generarPanValido(prefix = '4532'): string {
   return pan15 + checkDigit.toString();
 }
 
-test.describe('Flujo de Pago e-Commerce Pedidos360 (ms-pago)', () => {
+test.describe('Flujo de Pago contra ms-pagos real @backend', () => {
+  // Contra el backend real: TC-05 depende del pago creado en TC-02 (orden secuencial).
+  test.describe.configure({ mode: 'serial' });
+
   test.beforeEach(async ({ page }) => {
     // Configurar sesión activa en localStorage antes de cargar la página
-    await page.addInitScript((session) => {
-      window.localStorage.setItem('c360_cognito_session', session);
-    }, ADMIN_SESSION);
+    await page.addInitScript(
+      ({ session, compras }) => {
+        window.localStorage.setItem('c360_cognito_session', session);
+        // Compras registradas por un checkout (202): el formulario solo paga estas.
+        window.localStorage.setItem('c360_compras', compras);
+      },
+      { session: ADMIN_SESSION, compras: COMPRAS },
+    );
+    // Solo pagos va contra el backend real (no valida JWT). El carrito que la app carga al
+    // iniciar exige un JWT de Entra válido: se simula vacío para no forzar re-login.
+    await page.route('**/api/v1/carrito', (r) =>
+      r.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: [], envio: null, subtotal: 0, costoEnvio: 0, total: 0 }),
+      }),
+    );
   });
 
   test('TC-01: Formulario de Pago y validaciones reactivas (Luhn y campos)', async ({ page }) => {
-    await page.goto('/pago/checkout/00000000-0000-0000-0000-000000000001?monto=15990');
+    await page.goto('/pago/checkout/00000000-0000-0000-0000-000000000001');
 
     // Verificar resumen de la orden
     await expect(page.locator('text=Finalizar Pago')).toBeVisible();
@@ -77,7 +110,7 @@ test.describe('Flujo de Pago e-Commerce Pedidos360 (ms-pago)', () => {
 
   test('TC-02: Flujo Completo de Pago Autorizado (Tarjeta terminada en 6)', async ({ page }) => {
     const ordenId = '11111111-1111-1111-1111-111111111111';
-    await page.goto(`/pago/checkout/${ordenId}?monto=15990`);
+    await page.goto(`/pago/checkout/${ordenId}`);
 
     await page.locator('#numeroTarjeta').fill('4532 0151 1283 0366');
     await page.locator('#nombreTitular').fill('Carlos Valderrama');
@@ -99,9 +132,11 @@ test.describe('Flujo de Pago e-Commerce Pedidos360 (ms-pago)', () => {
     await expect(page.locator('dd.font-extrabold.text-blue-600')).toContainText(/15[.,]990/);
   });
 
-  test('TC-03: Flujo de Pago Rechazado (Tarjeta terminada en 0 - fondos insuficientes)', async ({ page }) => {
+  test('TC-03: Flujo de Pago Rechazado (Tarjeta terminada en 0 - fondos insuficientes)', async ({
+    page,
+  }) => {
     const ordenId = '22222222-2222-2222-2222-222222222222';
-    await page.goto(`/pago/checkout/${ordenId}?monto=25000`);
+    await page.goto(`/pago/checkout/${ordenId}`);
 
     // Tarjeta con Luhn válido terminada en 0 (determinísticamente fondos insuficientes)
     await page.locator('#numeroTarjeta').fill('4532 0151 0000 0030');
@@ -120,17 +155,14 @@ test.describe('Flujo de Pago e-Commerce Pedidos360 (ms-pago)', () => {
     await expect(page.locator('text=Reintentar con otra tarjeta')).toBeVisible();
   });
 
-  test('TC-04: Bloqueo Antifraude HTTP 429 por ventana deslizante (5 intentos en <10s)', async ({ page, request }) => {
+  test('TC-04: 4.º intento en < 10 s -> 429 y bloqueo de 30 minutos', async ({ page, request }) => {
     const ordenId = '33333333-3333-3333-3333-333333333333';
     // Generar tarjeta con Luhn válido nueva para no colisionar con ejecuciones anteriores
     const panRáfaga = generarPanValido('4532');
 
     // Disparar ráfaga de 3 intentos rápidos previos contra la API (dentro de los 10 segundos)
     for (let i = 1; i <= 3; i++) {
-      const resp = await request.post('http://localhost:4200/api/v1/pago/iniciar', {
-        headers: {
-          'Origin': 'http://localhost:4200',
-        },
+      const resp = await request.post('/api/v1/pago/iniciar', {
         data: {
           ordenId,
           monto: 15990,
@@ -145,7 +177,7 @@ test.describe('Flujo de Pago e-Commerce Pedidos360 (ms-pago)', () => {
     }
 
     // El 4.º intento se realiza desde la interfaz de usuario en menos de 10s
-    await page.goto(`/pago/checkout/${ordenId}?monto=15990`);
+    await page.goto(`/pago/checkout/${ordenId}`);
     await page.locator('#numeroTarjeta').fill(panRáfaga);
     await page.locator('#nombreTitular').fill('Atacante Script');
     await page.locator('#mesVencimiento').selectOption('12');
@@ -154,14 +186,19 @@ test.describe('Flujo de Pago e-Commerce Pedidos360 (ms-pago)', () => {
 
     await page.locator('#btnPagar').click();
 
-    // Verificar que aparece el mensaje de bloqueo antifraude 429 en la UI
-    await expect(page.locator('text=Bloqueo Preventivo Antifraude (Código 429)')).toBeVisible({
-      timeout: 10000,
-    });
-    await expect(page.locator('text=Por motivos de seguridad')).toBeVisible();
-
-    // Verificar que NO invita a reintentar de inmediato
+    // El 4.º intento en < 10 s: el backend bloquea la tarjeta 30 min y la UI lo informa.
+    const bloqueo = page.getByTestId('bloqueo-pago');
+    await expect(bloqueo).toBeVisible({ timeout: 10000 });
+    await expect(bloqueo).toContainText('Pago bloqueado por seguridad');
+    await expect(bloqueo).toContainText('debes esperar 30 minutos antes de volver a comprar');
+    await expect(bloqueo).toContainText(/(30:00|29:[0-5]\d)/);
+    await expect(page.locator('#btnPagar')).toBeDisabled();
     await expect(page.locator('button:has-text("Reintentar ahora")')).not.toBeVisible();
+
+    // Recargar no salta el bloqueo.
+    await page.reload();
+    await expect(page.getByTestId('bloqueo-pago')).toContainText(/29:[0-5]\d/);
+    await expect(page.locator('#btnPagar')).toBeDisabled();
   });
 
   test('TC-05: Historial de pagos de una orden', async ({ page }) => {
@@ -174,7 +211,9 @@ test.describe('Flujo de Pago e-Commerce Pedidos360 (ms-pago)', () => {
     await expect(page.locator('text=Autorizado').first()).toBeVisible();
   });
 
-  test('TC-06: Panel de Alertas Antifraude protegido para administradores (/pago/alertas)', async ({ page }) => {
+  test('TC-06: Panel de Alertas Antifraude protegido para administradores (/pago/alertas)', async ({
+    page,
+  }) => {
     await page.goto('/pago/alertas');
 
     await expect(page.locator('text=Panel Administrativo')).toBeVisible();

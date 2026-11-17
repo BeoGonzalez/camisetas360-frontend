@@ -11,6 +11,30 @@ import {
   PagoResponse,
 } from '../models/pago.model';
 
+/** Secuencias de 12-19 dígitos (con espacios o guiones): posible PAN reflejado por el backend. */
+const PATRON_PAN = /\d(?:[ -]?\d){11,18}/g;
+
+/**
+ * Segundos de bloqueo de un 429 antifraude. Fuente, en orden: `segundosParaReintentar` del body,
+ * header `Retry-After` (segundos), `desbloqueoEn` del body; si no hay ninguno, el valor por
+ * defecto del entorno (30 min). Se usan segundos relativos para no depender del reloj del backend.
+ */
+export function segundosParaReintentar(error: HttpErrorResponse): number {
+  const body = error.error;
+  const desdeBody = Number(body?.segundosParaReintentar);
+  if (Number.isFinite(desdeBody) && desdeBody > 0) return Math.ceil(desdeBody);
+  const retryAfter = Number(error.headers?.get('Retry-After'));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) return Math.ceil(retryAfter);
+  const hasta = Date.parse(body?.desbloqueoEn ?? '');
+  if (Number.isFinite(hasta) && hasta > Date.now()) return Math.ceil((hasta - Date.now()) / 1000);
+  return environment.pagos.bloqueoPorDefectoMinutos * 60;
+}
+
+/** Enmascara cualquier número con forma de tarjeta antes de guardarlo en estado o mostrarlo. */
+export function enmascararPan(texto: string): string {
+  return texto.replace(PATRON_PAN, '[número de tarjeta oculto]');
+}
+
 /**
  * Servicio encargado de la comunicación con el microservicio ms-pago
  * a través de AWS API Gateway.
@@ -21,19 +45,8 @@ import {
 export class PagoService {
   private readonly http = inject(HttpClient);
 
-  /** URL base para los endpoints de pago (soporta desarrollo local y AWS API Gateway) */
-  readonly apiUrl =
-    typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? '/api/v1/pago'
-      : `${environment.apiGateway}${environment.endpoints.pago}`;
-
-  /** URL base de la pasarela para healthcheck */
-  readonly baseUrl =
-    typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? ''
-      : environment.apiGateway;
+  /** {API_BASE}/api/v1/pago. El servicio de pagos NO valida JWT (brecha #3). */
+  readonly apiUrl = `${environment.apiGateway}${environment.endpoints.pago}`;
 
   /**
    * Inicia una transacción de pago y ejecuta la evaluación antifraude preventiva.
@@ -99,16 +112,6 @@ export class PagoService {
   }
 
   /**
-   * Healthcheck de disponibilidad de ms-pago.
-   * GET /actuator/health
-   */
-  checkHealth(): Observable<{ status: string }> {
-    return this.http
-      .get<{ status: string }>(`${this.baseUrl}/actuator/health`)
-      .pipe(catchError((err: HttpErrorResponse) => this.handleError(err)));
-  }
-
-  /**
    * Mapeo centralizado de errores HTTP de ms-pago.
    */
   private handleError(error: HttpErrorResponse): Observable<never> {
@@ -124,7 +127,8 @@ export class PagoService {
     switch (status) {
       case 400: {
         pagoError.codigo = errBody?.error || 'DATOS_INVALIDOS';
-        pagoError.mensaje = errBody?.mensaje || 'Los datos de la tarjeta o del pago son inválidos.';
+        // El texto crudo del backend no se muestra; los errores por campo sí (validación del form).
+        pagoError.mensaje = 'Los datos de la tarjeta o del pago son inválidos.';
 
         // Mapear errores de validación de campos si vienen en formato "campo: mensaje, campo: mensaje"
         if (typeof errBody?.mensaje === 'string' && errBody.mensaje.includes(':')) {
@@ -135,7 +139,7 @@ export class PagoService {
             if (idx > 0) {
               const campo = parte.substring(0, idx).trim();
               const msg = parte.substring(idx + 1).trim();
-              detalles[campo] = msg;
+              detalles[campo] = enmascararPan(msg);
             }
           }
           pagoError.detallesPorCampo = detalles;
@@ -147,9 +151,10 @@ export class PagoService {
         pagoError.esBloqueoFraude = true;
         pagoError.codigo = 'BLOQUEADO_FRAUDE';
         pagoError.mensaje =
-          'Transacción bloqueada por seguridad preventiva. Se detectó actividad inusual o múltiples intentos en un breve lapso de tiempo. Por favor comunícate con soporte si consideras que es un error.';
+          'Transacción bloqueada por seguridad preventiva: se detectaron demasiados intentos de pago en pocos segundos.';
         pagoError.intentosDetectados = errBody?.intentosDetectados;
         pagoError.ventanaSegundos = errBody?.ventanaSegundos;
+        pagoError.segundosParaReintentar = segundosParaReintentar(error);
         pagoError.pagoId = errBody?.pagoId;
         pagoError.ordenId = errBody?.ordenId;
         break;
@@ -157,8 +162,14 @@ export class PagoService {
 
       case 404: {
         pagoError.codigo = 'NO_ENCONTRADO';
-        pagoError.mensaje =
-          errBody?.mensaje || 'El pago o token de transacción solicitado no existe.';
+        // No se usa errBody.mensaje: el backend incluye en él el token de la transacción.
+        pagoError.mensaje = 'El pago o token de transacción solicitado no existe.';
+        break;
+      }
+
+      case 422: {
+        pagoError.codigo = errBody?.codigo || 'REGLA_NEGOCIO';
+        pagoError.mensaje = 'El pago no cumple las reglas del negocio.';
         break;
       }
 
@@ -173,10 +184,9 @@ export class PagoService {
 
       default: {
         pagoError.mensaje =
-          errBody?.mensaje ||
-          (status >= 500
+          status >= 500
             ? 'Error interno en la pasarela de pagos. Por favor intenta más tarde.'
-            : 'Error en la solicitud de pago.');
+            : 'Error en la solicitud de pago.';
         break;
       }
     }

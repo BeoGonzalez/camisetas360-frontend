@@ -1,43 +1,32 @@
+import { ENV, ORIGIN, azure, endpoints, ordersPolling, pagos, ws } from './shared';
+
+/**
+ * Producción: todo pasa por el API Gateway HTTP (NG_APP_API_BASE_URL), que maneja CORS.
+ * Tiempo real por API Gateway WebSocket (NG_APP_TELEMETRIA_WS_URL); sin URL, polling cada 5 s.
+ */
 export const environment = {
   production: true,
 
-  frontendGateway: 'https://o75p4wmtm0.execute-api.us-east-1.amazonaws.com',
-  apiGateway: 'https://xz8yr05wy8.execute-api.us-east-1.amazonaws.com',
-  backendGateway: 'https://xz8yr05wy8.execute-api.us-east-1.amazonaws.com',
+  frontendGateway: ORIGIN,
+  apiGateway: ENV.apiBaseUrl || ORIGIN,
 
-  endpoints: {
-    catalog: '/api/v1/catalog',
-    cart: '/api/v1/carrito',
-    auth: '/api/v1/auth',
-    orders: '/api/v1/orders',
-    notifications: '/api/v1/notifications',
-    recommendation: '/api/v1/recommendation',
-    cognitoLogin: '/api/v1/auth/cognito/login',
-    cognitoRegister: '/api/v1/auth/cognito/register',
-    pago: '/api/v1/pago',
-  },
+  endpoints,
 
-  azure: {
-    clientId: '719c999d-0f57-4ad5-9bd9-a72be5ca07e0',
-    authority: 'https://login.microsoftonline.com/e5372bf0-c5e3-4286-887c-79069f209c1f',
-    redirectUri: 'https://o75p4wmtm0.execute-api.us-east-1.amazonaws.com/auth/microsoft/callback',
-    scopes: [
-      'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Profile.Read',
-      'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Catalog.Read',
-      'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Checkout.Create',
-      'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Orders.Read',
-      'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Notifications.Send',
-    ],
-  },
+  wsBase: '',
+  telemetriaWsUrl: ENV.telemetriaWsUrl,
+  ws,
+
+  ordersPolling,
+  pagos,
+  azure,
 
   cognito: {
     region: 'us-east-1',
-    userPoolId: 'us-east-1_C5yZ5ikJP',
-    clientId: '38bhbobrlmd1nui5l814bk6i6j',
-    domain: 'https://camisetas360-auth-benja.auth.us-east-1.amazoncognito.com',
-    redirectUri: 'https://o75p4wmtm0.execute-api.us-east-1.amazonaws.com/auth/cognito/callback',
-    logoutUri: 'https://o75p4wmtm0.execute-api.us-east-1.amazonaws.com/',
+    userPoolId: 'us-east-1_jZ9MPGJGI',
+    clientId: '7svd55500qfk2qu3bis91urtqv',
+    domain: 'https://us-east-1jz9mpgjgi.auth.us-east-1.amazoncognito.com',
+    redirectUri: 'https://bbsgv4efrd.execute-api.us-east-1.amazonaws.com/auth/cognito/callback',
+    logoutUri: 'https://bbsgv4efrd.execute-api.us-east-1.amazonaws.com/',
     scopes: ['openid', 'email', 'profile'],
   },
 };
-

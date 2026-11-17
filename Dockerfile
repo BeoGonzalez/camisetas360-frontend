@@ -14,7 +14,16 @@ RUN pnpm install --frozen-lockfile
 
 COPY . .
 
-RUN pnpm run build
+# Configuración del SPA (ver .env.example). Se inyecta con --build-arg; quedan en el bundle
+# del navegador, así que solo van IDs públicos y URLs, nunca secretos.
+ARG NG_APP_ENTRA_CLIENT_ID
+ARG NG_APP_ENTRA_TENANT_ID
+ARG NG_APP_API_SCOPE_BASE
+ARG NG_APP_API_BASE_URL
+ARG NG_APP_TELEMETRIA_WS_URL
+
+# ENV_STRICT=1: el build falla si falta la configuración de Entra.
+RUN ENV_STRICT=1     NG_APP_ENTRA_CLIENT_ID="$NG_APP_ENTRA_CLIENT_ID"     NG_APP_ENTRA_TENANT_ID="$NG_APP_ENTRA_TENANT_ID"     NG_APP_API_SCOPE_BASE="$NG_APP_API_SCOPE_BASE"     NG_APP_API_BASE_URL="$NG_APP_API_BASE_URL"     NG_APP_TELEMETRIA_WS_URL="$NG_APP_TELEMETRIA_WS_URL"     pnpm run build
 
 
 # ==========================================

@@ -29,11 +29,39 @@ export function luhnCheck(value: string): boolean {
 }
 
 /**
- * Angular ValidatorFn para aplicar validación Luhn en un FormControl.
+ * Tarjetas de prueba oficiales de Webpay Plus (ambiente de integración de Transbank), con el
+ * resultado que devuelve el backend (WebpaySimuladoAdapter). Son datos públicos de prueba.
+ * Ojo: Redcompra 4511 3466 6003 7060 NO pasa Luhn tal como la publica Transbank.
  */
-export function luhnValidator(): ValidatorFn {
+export const TARJETAS_PRUEBA_TRANSBANK = [
+  { tipo: 'VISA crédito', numero: '4051885600446623', autorizada: true },
+  { tipo: 'AMEX crédito', numero: '370000000002032', autorizada: true },
+  { tipo: 'MASTERCARD crédito', numero: '5186059559590568', autorizada: false },
+  { tipo: 'Redcompra débito', numero: '4051884239937763', autorizada: true },
+  { tipo: 'Redcompra débito', numero: '4511346660037060', autorizada: true },
+  { tipo: 'Redcompra débito', numero: '5186008541233829', autorizada: false },
+  { tipo: 'Prepago VISA', numero: '4051886000056590', autorizada: true },
+  { tipo: 'Prepago MASTERCARD', numero: '5186174110629480', autorizada: false },
+] as const;
+
+const PANES_PRUEBA = new Set<string>(TARJETAS_PRUEBA_TRANSBANK.map((t) => t.numero));
+
+/** ¿Es una tarjeta de prueba oficial de Transbank? */
+export function esTarjetaPruebaTransbank(value: string): boolean {
+  return PANES_PRUEBA.has(String(value ?? '').replace(/[\s-]/g, ''));
+}
+
+/**
+ * Angular ValidatorFn para aplicar validación Luhn en un FormControl.
+ * Con `aceptarTarjetasPrueba`, las tarjetas oficiales de Transbank se aceptan aunque no pasen
+ * Luhn (la pasarela es simulada y las reconoce); desactivarlo al integrar Webpay real.
+ */
+export function luhnValidator(opciones: { aceptarTarjetasPrueba?: boolean } = {}): ValidatorFn {
   return (control: AbstractControl): ValidationErrors | null => {
     if (!control.value) {
+      return null;
+    }
+    if (opciones.aceptarTarjetasPrueba && esTarjetaPruebaTransbank(control.value)) {
       return null;
     }
     const valido = luhnCheck(control.value);
@@ -73,7 +101,10 @@ export function expiracionValida(mes: number, anio: number): boolean {
  * Angular ValidatorFn para validar que la tarjeta no esté expirada.
  * Puede aplicarse a un FormGroup con controles 'mes' y 'anio' o individualmente.
  */
-export function expiracionFormGroupValidator(mesKey = 'mesExpiracion', anioKey = 'anioExpiracion'): ValidatorFn {
+export function expiracionFormGroupValidator(
+  mesKey = 'mesExpiracion',
+  anioKey = 'anioExpiracion',
+): ValidatorFn {
   return (group: AbstractControl): ValidationErrors | null => {
     const mes = Number(group.get(mesKey)?.value);
     const anio = Number(group.get(anioKey)?.value);
@@ -105,7 +136,9 @@ export function cvvValidator(): ValidatorFn {
  * Detecta la marca de tarjeta según el prefijo (BIN),
  * alineado con TarjetaUtils.detectarMarca en ms-pago.
  */
-export function detectarMarcaTarjeta(numero: string): 'VISA' | 'MASTERCARD' | 'AMEX' | 'OTRA' | 'DESCONOCIDA' {
+export function detectarMarcaTarjeta(
+  numero: string,
+): 'VISA' | 'MASTERCARD' | 'AMEX' | 'OTRA' | 'DESCONOCIDA' {
   const pan = (numero || '').replace(/[\s-]/g, '');
   if (!pan) {
     return 'DESCONOCIDA';

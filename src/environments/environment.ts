@@ -1,53 +1,34 @@
+import { ENV, ORIGIN, azure, endpoints, ordersPolling, pagos, ws } from './shared';
+
+/**
+ * Desarrollo contra AWS (pnpm start). {API_BASE} = NG_APP_API_BASE_URL (API Gateway HTTP);
+ * si está vacío se usa el mismo origen. El Gateway HTTP no hace proxy de STOMP: el tiempo real
+ * usa la telemetría de API Gateway WebSocket (NG_APP_TELEMETRIA_WS_URL) o polling.
+ */
 export const environment = {
   production: false,
 
-  // ==========================================
-  // AWS API GATEWAY BACKEND
-  // ==========================================
-  frontendGateway: 'http://localhost:4200',
-  apiGateway: 'https://xz8yr05wy8.execute-api.us-east-1.amazonaws.com',
-  backendGateway: 'https://xz8yr05wy8.execute-api.us-east-1.amazonaws.com',
+  frontendGateway: ORIGIN,
+  apiGateway: ENV.apiBaseUrl || ORIGIN,
 
-  endpoints: {
-    catalog: '/api/v1/catalog',
-    cart: '/api/v1/carrito',
-    auth: '/api/v1/auth',
-    orders: '/api/v1/orders',
-    notifications: '/api/v1/notifications',
-    recommendation: '/api/v1/recommendation',
-    cognitoLogin: '/api/v1/auth/cognito/login',
-    cognitoRegister: '/api/v1/auth/cognito/register',
-    pago: '/api/v1/pago',
-  },
+  endpoints,
 
-  // ==========================================
-  // MICROSOFT ENTRA ID
-  // ==========================================
+  /** STOMP solo existe en local (docker compose); vacío = no se intenta. */
+  wsBase: '',
+  telemetriaWsUrl: ENV.telemetriaWsUrl,
+  ws,
 
-  azure: {
-    clientId: '719c999d-0f57-4ad5-9bd9-a72be5ca07e0',
-    authority: 'https://login.microsoftonline.com/e5372bf0-c5e3-4286-887c-79069f209c1f',
-    redirectUri: 'http://localhost:4200/auth/microsoft/callback',
-    scopes: [
-      'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Profile.Read',
-      'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Catalog.Read',
-      'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Checkout.Create',
-      'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Orders.Read',
-      'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Notifications.Send',
-    ],
-  },
-
-  // ==========================================
-  // AMAZON COGNITO
-  // ==========================================
+  ordersPolling,
+  pagos,
+  azure,
 
   cognito: {
     region: 'us-east-1',
-    userPoolId: 'us-east-1_C5yZ5ikJP',
-    clientId: '38bhbobrlmd1nui5l814bk6i6j',
-    domain: 'https://camisetas360-auth-benja.auth.us-east-1.amazoncognito.com',
-    redirectUri: 'http://localhost:4200/auth/cognito/callback',
-    logoutUri: 'http://localhost:4200/',
+    userPoolId: 'us-east-1_jZ9MPGJGI',
+    clientId: '7svd55500qfk2qu3bis91urtqv',
+    domain: 'https://us-east-1jz9mpgjgi.auth.us-east-1.amazoncognito.com',
+    redirectUri: `${ORIGIN}/auth/cognito/callback`,
+    logoutUri: `${ORIGIN}/`,
     scopes: ['openid', 'email', 'profile'],
   },
 };

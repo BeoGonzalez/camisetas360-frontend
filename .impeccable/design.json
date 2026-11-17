@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-15T00:00:00Z",
+  "title": "Design System: Camisetas360",
+  "extensions": {
+    "colorMeta": {
+      "paper": { "role": "neutral", "displayName": "Papel de Álbum", "canonical": "#f3efe6", "tonalRamp": ["#0d0c0a", "#26241f", "#3c3a33", "#57534a", "#6b6656", "#8f887a", "#ddd5c4", "#f3efe6"] },
+      "paper-2": { "role": "neutral", "displayName": "Banda de Papel", "canonical": "#e9e3d6", "tonalRamp": ["#0d0c0a", "#26241f", "#3c3a33", "#57534a", "#8f887a", "#c9c0ad", "#e9e3d6", "#f3efe6"] },
+      "ink": { "role": "primary", "displayName": "Negro Tinta", "canonical": "#161512", "tonalRamp": ["#0d0c0a", "#161512", "#26241f", "#3c3a33", "#57534a", "#6b6656", "#8f887a", "#c9c0ad"] },
+      "pitch": { "role": "secondary", "displayName": "Verde Cancha", "canonical": "#1f5f3a", "tonalRamp": ["#081a10", "#133b25", "#1f5f3a", "#2f7346", "#4f8c5f", "#7fae8a", "#adcbb4", "#edf3ee"] },
+      "rule": { "role": "neutral", "displayName": "Regla de Papel", "canonical": "#c9c0ad", "tonalRamp": ["#26241f", "#3c3a33", "#57534a", "#6b6656", "#8f887a", "#c9c0ad", "#ddd5c4", "#ebe5d8"] },
+      "slot": { "role": "neutral", "displayName": "Punteado de Casillero", "canonical": "#9c9484", "tonalRamp": ["#26241f", "#3c3a33", "#57534a", "#6b6656", "#9c9484", "#c9c0ad", "#ddd5c4", "#ebe5d8"] },
+      "ink-soft": { "role": "neutral", "displayName": "Tinta Suave (slate-700)", "canonical": "#3c3a33" },
+      "ink-muted": { "role": "neutral", "displayName": "Tinta Apagada (slate-600)", "canonical": "#57534a" },
+      "placeholder": { "role": "neutral", "displayName": "Placeholder", "canonical": "#7a7466" },
+      "pitch-deep": { "role": "secondary", "displayName": "Verde Cancha Profundo (blue-700)", "canonical": "#184b2e" },
+      "error": { "role": "error", "displayName": "Rojo de Error (red-700)", "canonical": "oklch(50.5% 0.213 27.518)" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display del álbum", "purpose": "Nombre del equipo en la página del álbum y títulos de pantalla (utilidad album-display: 800, ancho 125%, mayúsculas, 0.06em, interlineado 0.92)." },
+      "headline": { "displayName": "Headline", "purpose": "Nombre de la camiseta en el detalle y secciones de equipo en gestión; misma voz display a menor tamaño." },
+      "figure": { "displayName": "Cifra", "purpose": "Precio en el detalle y KPIs de gestión; tabular, 800, ancho 110%." },
+      "title": { "displayName": "Title", "purpose": "Tipo de camiseta sobre la línea base del casillero." },
+      "body": { "displayName": "Body", "purpose": "Texto corrido; descripciones a 17px con máximo 60ch." },
+      "label": { "displayName": "Rótulo (album-caps)", "purpose": "Navegación, botones, rótulos de campo, franja de estado y encabezados del pie (600, ancho 112%, 0.2em, mayúsculas)." },
+      "number": { "displayName": "Número de casillero (tnum)", "purpose": "Número de tres cifras del casillero y SKU, en verde cancha y cifras tabulares." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "ease-out-expo", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Única curva del sistema, para animaciones y transiciones." },
+      { "name": "page-turn", "value": "page-turn 0.55s var(--ease-out-expo)", "purpose": "La página del equipo entra desde el lomo (clip-path inset de derecha a izquierda, opacidad 0.2 → 1)." },
+      { "name": "tick", "value": "tick 0.5s var(--ease-out-expo) 0.18s both", "purpose": "Número de casillero, precio y stock ruedan en su lugar (translateY 0.55em y blur 2px → 0) tras pasar la página." },
+      { "name": "fade-in", "value": "fade-in 0.35s var(--ease-out-expo)", "purpose": "Aparición simple; también el contador del carrito (0.3s)." },
+      { "name": "slide-up", "value": "slide-up 0.45s var(--ease-out-expo)", "purpose": "Entrada de bloques desde 12px abajo." },
+      { "name": "slide-down", "value": "slide-down 0.3s var(--ease-out-expo)", "purpose": "Menú móvil que baja 6px." },
+      { "name": "reduced-motion", "value": "animation-duration: 0.01ms; transition-duration: 0.01ms; scroll-behavior: auto", "purpose": "Con prefers-reduced-motion: reduce se anula todo movimiento." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botón primario",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Acción principal (Añadir, Comprar, Iniciar sesión): tinta sólida que pasa a verde cancha.",
+      "html": "<button class=\"ds-btn-primary\">Añadir</button>",
+      "css": ".ds-btn-primary { background: var(--color-ink, #161512); color: var(--color-paper, #f3efe6); font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; font-stretch: 112%; font-weight: 600; text-transform: uppercase; letter-spacing: 0.2em; font-size: 11px; padding: 14px 24px; border: none; border-radius: 0; cursor: pointer; transition: background-color 0.15s cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-primary:hover { background: var(--color-pitch, #1f5f3a); } .ds-btn-primary:focus-visible { outline: 2px solid var(--color-pitch, #1f5f3a); outline-offset: 3px; } .ds-btn-primary:disabled { background: transparent; color: #6b6656; outline: 1px solid #c9c0ad; cursor: not-allowed; }"
+    },
+    {
+      "name": "Botón con contorno",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Acción secundaria (proveedor de login): contorno de tinta que se rellena en hover.",
+      "html": "<button class=\"ds-btn-outline\">Microsoft Entra ID</button>",
+      "css": ".ds-btn-outline { background: transparent; color: var(--color-ink, #161512); border: 1px solid var(--color-ink, #161512); border-radius: 0; font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif; font-stretch: 112%; font-weight: 600; text-transform: uppercase; letter-spacing: 0.2em; font-size: 11px; padding: 14px 20px; cursor: pointer; transition: background-color 0.15s, color 0.15s; } .ds-btn-outline:hover { background: var(--color-ink, #161512); color: var(--color-paper, #f3efe6); } .ds-btn-outline:focus-visible { outline: 2px solid var(--color-pitch, #1f5f3a); outline-offset: 3px; }"
+    },
+    {
+      "name": "Campo subrayado",
+      "kind": "input",
+      "refersTo": "input-underline",
+      "description": "Búsqueda y filtros: sin caja, solo regla inferior de tinta que pasa a verde al enfocar.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Buscar</span><input class=\"ds-input-underline\" type=\"search\" placeholder=\"Equipo, camiseta o código\"></label>",
+      "css": ".ds-field { display: block; } .ds-field-label { display: block; font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, sans-serif; font-stretch: 112%; font-weight: 600; text-transform: uppercase; letter-spacing: 0.2em; font-size: 10px; color: #3c3a33; } .ds-input-underline { margin-top: 8px; width: 100%; background: transparent; border: 0; border-bottom: 1px solid var(--color-ink, #161512); border-radius: 0; padding: 8px 0; font-size: 16px; color: var(--color-ink, #161512); caret-color: var(--color-pitch, #1f5f3a); } .ds-input-underline::placeholder { color: #7a7466; } .ds-input-underline:focus { outline: none; border-bottom-color: var(--color-pitch, #1f5f3a); }"
+    },
+    {
+      "name": "Campo con caja",
+      "kind": "input",
+      "refersTo": "input-boxed",
+      "description": "Formularios de login y cantidad: borde de tinta 1px, foco en verde cancha.",
+      "html": "<input class=\"ds-input-boxed\" type=\"email\" placeholder=\"tu@correo.com\">",
+      "css": ".ds-input-boxed { width: 100%; background: transparent; border: 1px solid var(--color-ink, #161512); border-radius: 0; padding: 12px; font-size: 16px; color: var(--color-ink, #161512); caret-color: var(--color-pitch, #1f5f3a); } .ds-input-boxed::placeholder { color: #7a7466; } .ds-input-boxed:focus { outline: none; border-color: var(--color-pitch, #1f5f3a); }"
+    },
+    {
+      "name": "Encabezado del álbum",
+      "kind": "nav",
+      "refersTo": "status-bar",
+      "description": "Franja de tinta con el estado de la temporada, logotipo espaciado y navegación en mayúsculas con subrayado activo.",
+      "html": "<header class=\"ds-nav\"><div class=\"ds-nav-status\">Premier League 2026/27 · Local, visitante y alternativa</div><nav class=\"ds-nav-bar\"><a class=\"ds-nav-logo\" href=\"#\">CAMISETAS<span>360</span></a><div class=\"ds-nav-links\"><a class=\"ds-nav-link is-active\" href=\"#\">Catálogo</a><a class=\"ds-nav-link\" href=\"#\">Mis pedidos</a><a class=\"ds-nav-link\" href=\"#\">Mi perfil</a></div></nav></header>",
+      "css": ".ds-nav { font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, sans-serif; background: var(--color-paper, #f3efe6); } .ds-nav-status { height: 32px; display: flex; align-items: center; justify-content: center; background: var(--color-ink, #161512); color: var(--color-paper, #f3efe6); font-stretch: 112%; font-weight: 600; text-transform: uppercase; letter-spacing: 0.2em; font-size: 11px; } .ds-nav-bar { height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 0 32px; border-bottom: 1px solid var(--color-ink, #161512); } .ds-nav-logo { font-size: 17px; font-weight: 800; font-stretch: 125%; letter-spacing: 0.42em; color: var(--color-ink, #161512); text-decoration: none; } .ds-nav-logo span { color: var(--color-pitch, #1f5f3a); } .ds-nav-links { display: flex; gap: 32px; } .ds-nav-link { font-stretch: 112%; font-weight: 600; text-transform: uppercase; letter-spacing: 0.2em; font-size: 11px; color: #3c3a33; text-decoration: none; text-underline-offset: 7px; text-decoration-thickness: 1px; transition: color 0.15s; } .ds-nav-link:hover, .ds-nav-link.is-active { color: var(--color-ink, #161512); text-decoration-line: underline; } .ds-nav-link:focus-visible { outline: 2px solid var(--color-pitch, #1f5f3a); outline-offset: 3px; }"
+    },
+    {
+      "name": "Casillero del álbum",
+      "kind": "custom",
+      "refersTo": "album-slot",
+      "description": "Casillero numerado con borde punteado; sin foto muestra la silueta impresa de la camiseta. Debajo, línea base con tipo y precio.",
+      "html": "<article class=\"ds-slot-item\"><div class=\"ds-slot\"><span class=\"ds-slot-num\">001</span><span class=\"ds-slot-low\">Últimas 3</span><svg class=\"ds-slot-shirt\" viewBox=\"0 0 120 120\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\" role=\"img\" aria-label=\"Imagen no disponible\"><path d=\"M44 14c3 7 9 11 16 11s13-4 16-11l26 12 12 26-17 9-6-12v63H29V49l-6 12-17-9 12-26z\"/><path d=\"M44 14c4 3 10 5 16 5s12-2 16-5\"/></svg></div><div class=\"ds-slot-base\"><h3>Local</h3><span>$94.990</span></div><a class=\"ds-slot-name\" href=\"#\">Arsenal Local 2026/27</a><p class=\"ds-slot-meta\">12 disponibles · ARS-LOC-26</p></article>",
+      "css": ".ds-slot-item { display: flex; flex-direction: column; max-width: 320px; font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, sans-serif; color: var(--color-ink, #161512); } .ds-slot { position: relative; aspect-ratio: 1 / 1; border: 1.5px dashed var(--color-slot, #9c9484); display: flex; align-items: center; justify-content: center; color: var(--color-slot, #9c9484); } .ds-slot-shirt { height: 50%; max-height: 160px; } .ds-slot-num { position: absolute; left: 12px; top: 10px; font-size: 13px; font-weight: 700; letter-spacing: 0.16em; color: var(--color-pitch, #1f5f3a); font-variant-numeric: tabular-nums lining-nums; } .ds-slot-low { position: absolute; right: 12px; top: 10px; font-size: 10px; font-weight: 600; font-stretch: 112%; text-transform: uppercase; letter-spacing: 0.2em; color: var(--color-ink, #161512); } .ds-slot-base { margin-top: 16px; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--color-ink, #161512); padding-bottom: 8px; } .ds-slot-base h3 { margin: 0; font-size: 13px; font-weight: 600; font-stretch: 112%; text-transform: uppercase; letter-spacing: 0.2em; } .ds-slot-base span { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums lining-nums; } .ds-slot-name { margin-top: 12px; font-size: 15px; color: var(--color-ink, #161512); text-decoration: none; text-underline-offset: 4px; } .ds-slot-name:hover { text-decoration: underline; } .ds-slot-name:focus-visible { outline: 2px solid var(--color-pitch, #1f5f3a); outline-offset: 3px; } .ds-slot-meta { margin: 4px 0 0; font-size: 14px; color: #57534a; font-variant-numeric: tabular-nums lining-nums; }"
+    },
+    {
+      "name": "Índice del álbum",
+      "kind": "nav",
+      "refersTo": "index-tab",
+      "description": "Lista de equipos sobre la banda de papel con su rango de números; el activo en verde cancha.",
+      "html": "<ol class=\"ds-index\"><li><button class=\"ds-index-tab\" aria-current=\"page\"><span>Arsenal</span><span class=\"ds-index-range\">001–003</span></button></li><li><button class=\"ds-index-tab\"><span>Aston Villa</span><span class=\"ds-index-range\">004–006</span></button></li><li><button class=\"ds-index-tab\"><span>Bournemouth</span><span class=\"ds-index-range\">007–009</span></button></li></ol>",
+      "css": ".ds-index { list-style: none; margin: 0; padding: 20px 32px; background: var(--color-paper-2, #e9e3d6); max-width: 320px; font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, sans-serif; } .ds-index li { border-top: 1px solid var(--color-rule, #c9c0ad); } .ds-index-tab { width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 10px 0; background: none; border: 0; text-align: left; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: var(--color-ink, #161512); cursor: pointer; transition: color 0.15s; } .ds-index-tab:hover, .ds-index-tab[aria-current=page] { color: var(--color-pitch, #1f5f3a); } .ds-index-tab:focus-visible { outline: 2px solid var(--color-pitch, #1f5f3a); outline-offset: 3px; } .ds-index-range { font-size: 12px; letter-spacing: 0.08em; color: #57534a; font-variant-numeric: tabular-nums lining-nums; }"
+    },
+    {
+      "name": "Kit badges",
+      "kind": "chip",
+      "refersTo": "kit-badge-local",
+      "description": "Tipo de camiseta en gestión, distinguido solo con las dos tintas.",
+      "html": "<div class=\"ds-kits\"><span class=\"ds-kit ds-kit-local\">Local</span><span class=\"ds-kit ds-kit-visitante\">Visitante</span><span class=\"ds-kit ds-kit-alternativa\">Alternativa</span></div>",
+      "css": ".ds-kits { display: flex; gap: 8px; } .ds-kit { padding: 4px 8px; font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, sans-serif; font-stretch: 112%; font-weight: 600; text-transform: uppercase; letter-spacing: 0.2em; font-size: 10px; } .ds-kit-local { background: var(--color-ink, #161512); color: var(--color-paper, #f3efe6); } .ds-kit-visitante { background: var(--color-paper, #f3efe6); color: var(--color-ink, #161512); box-shadow: inset 0 0 0 1px var(--color-ink, #161512); } .ds-kit-alternativa { background: var(--color-pitch, #1f5f3a); color: var(--color-paper, #f3efe6); }"
+    },
+    {
+      "name": "Ficha técnica",
+      "kind": "custom",
+      "description": "Lista de especificaciones del detalle: regla de tinta arriba, filas con reglas de papel, valores tabulares a la derecha.",
+      "html": "<dl class=\"ds-spec\"><div><dt>Equipo</dt><dd>Arsenal</dd></div><div><dt>Tipo</dt><dd>Local</dd></div><div><dt>Código</dt><dd>ARS-LOC-26</dd></div><div><dt>Stock</dt><dd class=\"is-ok\">12 unidades disponibles</dd></div></dl>",
+      "css": ".ds-spec { margin: 0; max-width: 420px; border-top: 1px solid var(--color-ink, #161512); font-family: 'Archivo Variable', 'Archivo', ui-sans-serif, sans-serif; font-size: 14px; color: var(--color-ink, #161512); } .ds-spec div { display: flex; justify-content: space-between; gap: 24px; padding: 12px 0; border-bottom: 1px solid var(--color-rule, #c9c0ad); } .ds-spec dt { font-stretch: 112%; font-weight: 600; text-transform: uppercase; letter-spacing: 0.2em; font-size: 10px; color: #57534a; } .ds-spec dd { margin: 0; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums lining-nums; } .ds-spec dd.is-ok { color: var(--color-pitch, #1f5f3a); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "El álbum de la temporada",
+    "overview": "Camisetas360 se imprime como un álbum de láminas de la Premier League 2026/27: papel crema, dos tintas y casilleros numerados con borde punteado esperando su lámina. Cada equipo es una página; cada camiseta (local, visitante, alternativa) es un casillero con su número de tres cifras, su precio y su stock. El catálogo es la pieza que fija el mundo; el resto de la tienda lo hereda.\n\nLa estructura no sale de cajas sino de la imprenta: reglas finas de 1px en tinta o en gris de papel, casilleros punteados, líneas base bajo el precio y bandas de papel más oscuro. No hay tarjetas, ni esquinas redondeadas, ni sombras. La voz tipográfica es una grotesca pesada (Archivo, eje de ancho expandido) en mayúsculas muy espaciadas para nombres de equipo y rótulos, y cifras tabulares de ancho fijo para todo lo que cuenta: precio, stock, numeración. La densidad es editorial y sobria en el catálogo (Persuade) y más compacta en gestión (Operate), con el mismo papel y las mismas tintas.\n\nLa honestidad del producto es visual: si una camiseta no tiene foto, el casillero muestra la silueta impresa de una camiseta, nunca una imagen inventada. Las fotos las sube el administrador.",
+    "keyCharacteristics": [
+      "Papel crema con bandas más oscuras; dos tintas (negro tinta y verde cancha); rojo solo para errores.",
+      "Cero radios y cero sombras, por token: la profundidad la dan reglas de 1px, casilleros punteados y bandas.",
+      "Display en mayúsculas de ancho expandido (125%) con tracking amplio; rótulos en mayúsculas al 112% con 0.2em.",
+      "Cifras tabulares para precio, stock y numeración de casilleros (001, 002…).",
+      "Movimiento de imprenta: la página entra desde el lomo y las cifras ruedan en su lugar como un marcador."
+    ],
+    "rules": [
+      { "name": "The Two Inks Rule", "body": "Solo dos tintas: negro tinta y verde cancha. El rojo existe únicamente para errores. Ningún otro tono (ámbar, esmeralda, azul real) entra a una pantalla nueva.", "section": "colors" },
+      { "name": "The Palette Remap Rule", "body": "El mundo se aplica remapeando la paleta de Tailwind (`slate` = papel→tinta, `blue` = verde cancha) en `@theme`. Una pantalla nueva usa los tokens `paper`/`ink`/`pitch`/`rule`/`slot`; nunca reintroduce `white` o grises fríos.", "section": "colors" },
+      { "name": "The Tabular Figures Rule", "body": "Todo lo que se cuenta (precio, stock, numeración, contador del carrito, KPIs) usa `tnum` (`tabular-nums lining-nums`). Las cifras no bailan al cambiar.", "section": "typography" },
+      { "name": "The CLP Rule", "body": "Los precios se muestran con el pipe `clp`: pesos chilenos, `es-CL`, sin decimales (`$94.990`).", "section": "typography" },
+      { "name": "The No Eyebrow Rule", "body": "Los encabezados no llevan rótulos en mayúsculas encima. El contexto (liga, cantidad de camisetas) va al lado o debajo, en la misma línea base.", "section": "typography" },
+      { "name": "The Printed Flat Rule", "body": "Nada flota. Si algo necesita separarse, se le pone una regla de 1px, una banda de papel o un casillero punteado; nunca una sombra.", "section": "elevation" },
+      { "name": "The No Cards Rule", "body": "No se encierra contenido en tarjetas. Un producto es un casillero (la imagen) más una línea base (tipo y precio) y texto suelto debajo.", "section": "elevation" }
+    ],
+    "dos": [
+      "**Do** construir con dos tintas sobre papel: `ink` para estructura y texto, `pitch` para número, estado activo, foco y acción en hover; `red-700` solo para errores.",
+      "**Do** separar con reglas de 1px (tinta para estructura, `rule` para subdivisión), bandas `paper-2` y casilleros `album-slot`.",
+      "**Do** escribir nombres de equipo y títulos con `album-display`, y rótulos, botones y navegación con `album-caps`.",
+      "**Do** usar `tnum` en todo precio, stock, número de casillero, contador y KPI, y formatear precios con el pipe `clp` (CLP sin decimales).",
+      "**Do** mostrar la silueta impresa de `app-product-image` cuando no hay foto, con su texto `sr-only`.",
+      "**Do** cambiar la proporción del casillero con el ancho (`2/1` → `4/3` → cuadrado) para que la página del equipo quepa en móvil.",
+      "**Do** usar `ease-out-expo` y respetar la regla de movimiento reducido."
+    ],
+    "donts": [
+      "**Don't** usar tarjetas, esquinas redondeadas ni sombras; los tokens están en `0` y `none` a propósito.",
+      "**Don't** añadir un tercer color de acento (ámbar, esmeralda, azul) ni fondos `white`; el rojo se reserva para errores.",
+      "**Don't** poner rótulos tipo \"eyebrow\" en mayúsculas encima de los encabezados.",
+      "**Don't** inventar imágenes de producto, escudos o marcas de clubes; las fotos las sube el administrador.",
+      "**Don't** usar cifras proporcionales en precios o stock, ni mostrar decimales en CLP.",
+      "**Don't** usar una fuente del sistema o una monoespaciada para la voz display o las cifras; todo es Archivo Variable."
+    ]
+  }
+}

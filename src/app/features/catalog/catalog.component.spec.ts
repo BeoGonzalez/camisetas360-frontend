@@ -1,414 +1,186 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
-import {
-  provideHttpClientTesting,
-  HttpTestingController,
-} from '@angular/common/http/testing';
-
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideRouter, Router } from '@angular/router';
 import { CatalogComponent } from './catalog.component';
-import { CartService } from '../cart/services/cart.service';
-import { MSALInterceptorConfigFactory } from '../../app.config';
+import { AuthService } from '../../core/services/auth.service';
 import { Product } from '../../core/models/product.model';
 import { environment } from '../../../environments/environment';
 
-const url =
-  `${environment.apiGateway}${environment.endpoints.catalog}/products`;
-
-const catalogProtectedResource =
-  `${environment.apiGateway}${environment.endpoints.catalog}/*`;
-
-const catalogScope =
-  'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0/Catalog.Read';
+const api = environment.apiGateway;
+const productsUrl = `${api}/api/v1/catalog/products`;
 
 const products: Product[] = [
   {
     sku: 'CAM-001',
-    name: 'Camiseta Titular 2026',
-    category: 'Fútbol',
-    price: 39.99,
+    name: 'Camiseta Titular',
+    category: 'Futbol',
+    price: 39990,
     stock: 100,
-    description:
-      'Camiseta oficial de local para la temporada',
+    description: 'Local',
   },
   {
     sku: 'CAM-002',
-    name: 'Camiseta Visitante 2026',
-    category: 'Fútbol',
-    price: 39.99,
-    stock: 80,
-    description:
-      'Camiseta alternativa de visitante',
+    name: 'Camiseta Visitante',
+    category: 'Futbol',
+    price: 39990,
+    stock: 0,
+    description: 'Visita',
   },
   {
-    sku: 'CAM-003',
-    name: 'Camiseta Retro Edición Especial',
-    category: 'Colección',
-    price: 49.99,
-    stock: 25,
-    description:
-      'Diseño clásico conmemorativo',
+    sku: 'RET-003',
+    name: 'Retro Especial',
+    category: 'Coleccion',
+    price: 49990,
+    stock: 3,
+    description: 'Clasico',
   },
 ];
 
-beforeEach(() => {
-  TestBed.configureTestingModule({
-    imports: [
-      CatalogComponent,
-    ],
+describe('CatalogComponent', () => {
+  let http: HttpTestingController;
+  let isCustomer: boolean;
+  let loggedIn: boolean;
 
-    providers: [
-      provideHttpClient(),
-      provideHttpClientTesting(),
-    ],
+  beforeEach(() => {
+    isCustomer = false;
+    loggedIn = true;
+    TestBed.configureTestingModule({
+      imports: [CatalogComponent],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        {
+          provide: AuthService,
+          useValue: { isCustomer: () => isCustomer, isLoggedIn: () => loggedIn },
+        },
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  function render() {
+    const fixture = TestBed.createComponent(CatalogComponent);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  it('muestra skeleton mientras carga y luego los productos', () => {
+    const f = render();
+    expect(f.nativeElement.querySelector('[aria-busy="true"]')).not.toBeNull();
+    http.expectOne(productsUrl).flush(products);
+    f.detectChanges();
+    expect(f.nativeElement.querySelectorAll('article').length).toBe(3);
+  });
+
+  it('NO llama al detalle por producto al listar (no registra visitas)', () => {
+    render();
+    http.expectOne(productsUrl).flush(products);
+    http.expectNone((r) => r.url.startsWith(`${productsUrl}/`));
+  });
+
+  it('filtra por búsqueda y por categoría', () => {
+    const f = render();
+    http.expectOne(productsUrl).flush(products);
+    const c = f.componentInstance;
+    c.query.set('retro');
+    expect(c.filtered().map((p) => p.sku)).toEqual(['RET-003']);
+    c.query.set('');
+    c.category.set('Futbol');
+    expect(c.filtered().length).toBe(2);
+    expect(c.categories()).toEqual(['Coleccion', 'Futbol']);
+  });
+
+  it('estado vacío', () => {
+    const f = render();
+    http.expectOne(productsUrl).flush([]);
+    f.detectChanges();
+    expect(f.nativeElement.textContent).toContain('No hay productos disponibles');
+  });
+
+  it('error 5xx muestra mensaje y permite reintento manual', () => {
+    const f = render();
+    http.expectOne(productsUrl).flush({}, { status: 503, statusText: 'Unavailable' });
+    f.detectChanges();
+    const alert: HTMLElement = f.nativeElement.querySelector('[role="alert"]');
+    expect(alert).not.toBeNull();
+    alert.querySelector('button')!.click();
+    http.expectOne(productsUrl).flush(products);
+    f.detectChanges();
+    expect(f.nativeElement.querySelectorAll('article').length).toBe(3);
+  });
+
+  it('403 muestra "Sin permiso" sin botón de reintento', () => {
+    const f = render();
+    http.expectOne(productsUrl).flush({}, { status: 403, statusText: 'Forbidden' });
+    f.detectChanges();
+    const alert: HTMLElement = f.nativeElement.querySelector('[role="alert"]');
+    expect(alert.textContent).toContain('Sin permiso');
+    expect(alert.querySelector('button')).toBeNull();
+  });
+
+  it('el botón Añadir solo aparece para CUSTOMER y agrega vía POST /carrito/items', () => {
+    let f = render();
+    http.expectOne(productsUrl).flush(products);
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('button[aria-label^="Añadir"]')).toBeNull();
+    f.destroy();
+
+    isCustomer = true;
+    f = render();
+    http.expectOne(productsUrl).flush(products);
+    http
+      .expectOne(`${api}/api/v1/recomendaciones`)
+      .flush({ fuente: 'POPULARES', versionModelo: null, items: [] });
+    f.detectChanges();
+    const btn: HTMLButtonElement = f.nativeElement.querySelector(
+      'button[aria-label="Añadir Camiseta Titular al carrito"]',
+    );
+    btn.click();
+    const req = http.expectOne(`${api}/api/v1/carrito/items`);
+    expect(req.request.body).toMatchObject({ sku: 'CAM-001', cantidad: 1, precioUnitario: 39990 });
+    req.flush({ items: [], envio: null, subtotal: 0, costoEnvio: 0, total: 0 });
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('[role="status"]').textContent).toContain('se añadió');
+  });
+
+  it('producto sin stock tiene el botón deshabilitado', () => {
+    isCustomer = true;
+    const f = render();
+    http.expectOne(productsUrl).flush(products);
+    http
+      .expectOne(`${api}/api/v1/recomendaciones`)
+      .flush({ fuente: 'POPULARES', versionModelo: null, items: [] });
+    f.detectChanges();
+    const btn: HTMLButtonElement = f.nativeElement.querySelector(
+      'button[aria-label="Añadir Camiseta Visitante al carrito"]',
+    );
+    expect(btn.disabled).toBe(true);
+  });
+
+  it('visitante sin sesión: ve "Comprar" y al presionarlo va al login con la camiseta como destino', () => {
+    loggedIn = false;
+    const f = render();
+    http.expectOne(productsUrl).flush(products);
+    f.detectChanges();
+    const router = TestBed.inject(Router);
+    const navigate = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+    const comprar = [
+      ...f.nativeElement.querySelectorAll('button[aria-label^="Comprar"]'),
+    ] as HTMLButtonElement[];
+    expect(comprar.map((b) => b.textContent?.trim())).toEqual(['Comprar', 'Agotado', 'Comprar']);
+    expect(comprar[1].disabled).toBe(true);
+    expect(f.nativeElement.querySelector('button[aria-label^="Añadir"]')).toBeNull();
+
+    comprar[0].click();
+    expect(navigate).toHaveBeenCalledWith(['/auth/login'], {
+      queryParams: { returnUrl: '/catalog/CAM-001', motivo: 'comprar' },
+    });
+    http.expectNone(() => true); // no intenta agregar al carrito
   });
 });
-
-afterEach(() => {
-  TestBed.inject(
-    HttpTestingController
-  ).verify();
-});
-
-it(
-  'carga y muestra los tres productos y sus decimales',
-  () => {
-
-    const fixture =
-      TestBed.createComponent(
-        CatalogComponent
-      );
-
-    fixture.detectChanges();
-
-    expect(
-      fixture.componentInstance.loading()
-    ).toBe(true);
-
-    const request =
-      TestBed.inject(
-        HttpTestingController
-      ).expectOne(url);
-
-    expect(
-      request.request.method
-    ).toBe('GET');
-
-    /*
-     * Este test verifica CatalogComponent,
-     * no la integración MSAL.
-     *
-     * El token se prueba por separado mediante
-     * MSALInterceptorConfigFactory.
-     */
-    expect(
-      request.request.withCredentials
-    ).toBe(false);
-
-    request.flush(products);
-
-    fixture.detectChanges();
-
-    const content =
-      fixture.nativeElement.textContent;
-
-    for (const product of products) {
-
-      expect(
-        content
-      ).toContain(
-        product.name
-      );
-
-      expect(
-        content
-      ).toContain(
-        `Stock: ${product.stock}`
-      );
-    }
-
-    expect(
-      content.match(/Disponible/g)
-    ).toHaveLength(3);
-
-    expect(
-      content
-    ).toContain(
-      '39.99'
-    );
-
-    expect(
-      content
-    ).toContain(
-      '49.99'
-    );
-
-    expect(
-      content
-    ).toContain(
-      'Imagen no disponible'
-    );
-
-    const button =
-      fixture.nativeElement
-        .querySelector('button');
-
-    button.click();
-
-    expect(
-      TestBed.inject(
-        CartService
-      ).items()[0]
-    ).toMatchObject({
-      sku: 'CAM-001',
-      productId: 'CAM-001',
-      name: products[0].name,
-      price: 39.99,
-      quantity: 1,
-    });
-  }
-);
-
-it(
-  'protege el catálogo con el scope Catalog.Read',
-  () => {
-
-    const config =
-      MSALInterceptorConfigFactory();
-
-    const scopes =
-      config.protectedResourceMap.get(
-        catalogProtectedResource
-      );
-
-    expect(
-      scopes
-    ).toEqual([
-      catalogScope,
-    ]);
-  }
-);
-
-it(
-  'no marca el catálogo como recurso público',
-  () => {
-
-    const config =
-      MSALInterceptorConfigFactory();
-
-    const scopes =
-      config.protectedResourceMap.get(
-        catalogProtectedResource
-      );
-
-    expect(
-      scopes
-    ).not.toBeNull();
-
-    expect(
-      scopes
-    ).toContain(
-      catalogScope
-    );
-  }
-);
-
-it(
-  'muestra lista vacía',
-  () => {
-
-    const fixture =
-      TestBed.createComponent(
-        CatalogComponent
-      );
-
-    fixture.detectChanges();
-
-    TestBed.inject(
-      HttpTestingController
-    )
-      .expectOne(url)
-      .flush([]);
-
-    fixture.detectChanges();
-
-    expect(
-      fixture.nativeElement.textContent
-    ).toContain(
-      'No hay productos disponibles'
-    );
-  }
-);
-
-it(
-  'muestra sin stock y deshabilita la compra cuando el stock es cero',
-  () => {
-
-    const fixture =
-      TestBed.createComponent(
-        CatalogComponent
-      );
-
-    fixture.detectChanges();
-
-    TestBed.inject(
-      HttpTestingController
-    )
-      .expectOne(url)
-      .flush([
-        {
-          ...products[0],
-          stock: 0,
-        },
-      ]);
-
-    fixture.detectChanges();
-
-    expect(
-      fixture.nativeElement.textContent
-    ).toContain(
-      'Stock: 0'
-    );
-
-    expect(
-      fixture.nativeElement.textContent
-    ).toContain(
-      'Sin stock'
-    );
-
-    expect(
-      fixture.nativeElement
-        .querySelector('button')
-        .disabled
-    ).toBe(true);
-  }
-);
-
-it(
-  'muestra error y permite reintentar',
-  () => {
-
-    const fixture =
-      TestBed.createComponent(
-        CatalogComponent
-      );
-
-    fixture.detectChanges();
-
-    const http =
-      TestBed.inject(
-        HttpTestingController
-      );
-
-    http
-      .expectOne(url)
-      .flush(
-        'Error',
-        {
-          status: 500,
-          statusText:
-            'Server Error',
-        }
-      );
-
-    fixture.detectChanges();
-
-    expect(
-      fixture.nativeElement.textContent
-    ).toContain(
-      'Error al cargar el catálogo'
-    );
-
-    fixture.nativeElement
-      .querySelector('button')
-      .click();
-
-    http
-      .expectOne(url)
-      .flush(products);
-
-    fixture.detectChanges();
-
-    expect(
-      fixture.componentInstance.error()
-    ).toBe('');
-
-    expect(
-      fixture.componentInstance.products()
-    ).toEqual(products);
-  }
-);
-
-it(
-  'mantiene productos separados por SKU y calcula cantidades y totales',
-  () => {
-
-    const cart =
-      TestBed.inject(
-        CartService
-      );
-
-    cart.addToCart(
-      products[0],
-      ''
-    );
-
-    cart.addToCart(
-      products[1],
-      ''
-    );
-
-    cart.addToCart(
-      products[0],
-      ''
-    );
-
-    expect(
-      cart.items()
-    ).toHaveLength(2);
-
-    expect(
-      cart.items()[0].quantity
-    ).toBe(2);
-
-    expect(
-      cart.total()
-    ).toBeCloseTo(
-      119.97
-    );
-
-    cart.updateQuantity(
-      'CAM-002',
-      '',
-      2
-    );
-
-    expect(
-      cart.total()
-    ).toBeCloseTo(
-      159.96
-    );
-
-    cart.removeFromCart(
-      'CAM-001',
-      ''
-    );
-
-    expect(
-      cart.items()[0].sku
-    ).toBe(
-      'CAM-002'
-    );
-
-    cart.addToCart(
-      {
-        ...products[2],
-        stock: 0,
-      },
-      ''
-    );
-
-    expect(
-      cart.items()
-    ).toHaveLength(1);
-  }
-);

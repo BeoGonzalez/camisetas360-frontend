@@ -1,9 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
-import {
-  provideHttpClientTesting,
-  HttpTestingController,
-} from '@angular/common/http/testing';
+import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { NotificationService } from './notification.service';
 import { environment } from '../../../environments/environment';
 import { SendEmailRequest } from '../models/notification.model';
@@ -16,11 +13,7 @@ describe('NotificationService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [
-        NotificationService,
-        provideHttpClient(),
-        provideHttpClientTesting(),
-      ],
+      providers: [NotificationService, provideHttpClient(), provideHttpClientTesting()],
     });
 
     service = TestBed.inject(NotificationService);
@@ -29,10 +22,6 @@ describe('NotificationService', () => {
 
   afterEach(() => {
     httpTesting.verify();
-  });
-
-  it('debe crearse correctamente', () => {
-    expect(service).toBeTruthy();
   });
 
   it('debe enviar un correo administrativo exitosamente (POST 200)', () => {
@@ -47,12 +36,8 @@ describe('NotificationService', () => {
       to: 'cliente@ejemplo.com',
     };
 
-    service.sendEmail(request).subscribe((res) => {
-      expect(res).toEqual(mockResponse);
-      expect(service.lastSuccess()).toEqual(mockResponse);
-      expect(service.sending()).toBe(false);
-      expect(service.lastError()).toBeNull();
-    });
+    let res: unknown;
+    service.sendEmail(request).subscribe((r) => (res = r));
 
     expect(service.sending()).toBe(true);
 
@@ -60,6 +45,11 @@ describe('NotificationService', () => {
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual(request);
     req.flush(mockResponse);
+
+    expect(res).toEqual(mockResponse);
+    expect(service.lastSuccess()).toEqual(mockResponse);
+    expect(service.sending()).toBe(false);
+    expect(service.lastError()).toBeNull();
   });
 
   it('debe manejar error 403 Forbidden cuando el usuario carece de ROLE_ADMIN o SCOPE_Notifications.Send', () => {
@@ -69,19 +59,16 @@ describe('NotificationService', () => {
       body: 'Contenido',
     };
 
+    let err: Error | undefined;
     service.sendEmail(request).subscribe({
-      next: () => {
-        expect('No debió tener éxito').toBe('Fallo esperado con 403');
-      },
-      error: (err) => {
-        expect(err.message).toContain('Acceso denegado');
-        expect(service.lastError()).toContain('Acceso denegado');
-        expect(service.sending()).toBe(false);
-      },
+      next: () => expect.unreachable('no debía tener éxito'),
+      error: (e) => (err = e),
     });
 
-    const req = httpTesting.expectOne(url);
-    req.flush('Forbidden', { status: 403, statusText: 'Forbidden' });
+    httpTesting.expectOne(url).flush('Forbidden', { status: 403, statusText: 'Forbidden' });
+    expect(err?.message).toContain('Acceso denegado');
+    expect(service.lastError()).toContain('Acceso denegado');
+    expect(service.sending()).toBe(false);
   });
 
   it('debe manejar error 400 Bad Request cuando la carga útil es inválida', () => {
@@ -91,18 +78,15 @@ describe('NotificationService', () => {
       body: '',
     };
 
+    let err: Error | undefined;
     service.sendEmail(request).subscribe({
-      next: () => {
-        expect('No debió tener éxito').toBe('Fallo esperado con 400');
-      },
-      error: (err) => {
-        expect(err.message).toContain('Datos de solicitud inválidos');
-        expect(service.lastError()).toContain('Datos de solicitud inválidos');
-      },
+      next: () => expect.unreachable('no debía tener éxito'),
+      error: (e) => (err = e),
     });
 
-    const req = httpTesting.expectOne(url);
-    req.flush('Bad Request', { status: 400, statusText: 'Bad Request' });
+    httpTesting.expectOne(url).flush('Bad Request', { status: 400, statusText: 'Bad Request' });
+    expect(err?.message).toContain('Datos de solicitud inválidos');
+    expect(service.lastError()).toContain('Datos de solicitud inválidos');
   });
 
   it('debe proveer la información del canal de notificaciones automáticas vía RabbitMQ', () => {

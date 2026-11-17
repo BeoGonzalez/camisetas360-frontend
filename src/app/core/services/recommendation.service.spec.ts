@@ -1,124 +1,101 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
-import {
-  provideHttpClientTesting,
-  HttpTestingController,
-} from '@angular/common/http/testing';
-import { of, throwError } from 'rxjs';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { RecommendationService } from './recommendation.service';
-import { CatalogService } from './catalog.service';
 import { environment } from '../../../environments/environment';
-import { Product } from '../models/product.model';
+import { ApiError } from '../http/api-error';
 
 describe('RecommendationService', () => {
   let service: RecommendationService;
-  let httpTesting: HttpTestingController;
-  let catalogService: any;
-
-  const mockProducts: Product[] = [
-    {
-      sku: 'CAM-001',
-      name: 'Camiseta Titular 2026',
-      category: 'Fútbol',
-      price: 39.99,
-      stock: 100,
-      description: 'Camiseta oficial de local',
-    },
-    {
-      sku: 'CAM-002',
-      name: 'Camiseta Visitante 2026',
-      category: 'Fútbol',
-      price: 39.99,
-      stock: 50,
-      description: 'Camiseta alternativa oficial',
-    },
-  ];
+  let http: HttpTestingController;
+  const url = `${environment.apiGateway}/api/v1/analytics/recomendaciones`;
 
   beforeEach(() => {
-    catalogService = {
-      getProducts: () => of(mockProducts),
-    };
-
     TestBed.configureTestingModule({
-      providers: [
-        RecommendationService,
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        { provide: CatalogService, useValue: catalogService },
-      ],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
     });
-
     service = TestBed.inject(RecommendationService);
-    httpTesting = TestBed.inject(HttpTestingController);
+    http = TestBed.inject(HttpTestingController);
   });
 
-  afterEach(() => {
-    httpTesting.verify();
-  });
+  afterEach(() => http.verify());
 
-  it('debe crearse correctamente', () => {
-    expect(service).toBeTruthy();
-    expect(service.status()).toBe('IDLE');
-  });
-
-  it('debe procesar recomendaciones del backend cuando están disponibles', () => {
-    const mockBackendResponse = {
-      id: 1,
-      orderId: 10,
-      customerEmail: 'cliente@ejemplo.com',
-      explanation: 'Estilo ofensivo y clásico',
-      recommendations: [
+  it('GET /analytics/recomendaciones y devuelve el contrato tal cual', () => {
+    const body = {
+      items: [
         {
-          name: 'Camiseta Alternativa',
-          reason: 'Combina con tu compra previa',
+          sku: 'CAM-1',
+          nombre: 'Local',
+          categoria: 'Fútbol',
+          precio: 100,
+          score: 0.9,
+          motivo: 'Visto',
         },
       ],
+      perfil: { Futbol: 0.8 },
+      generadoEn: '2026-11-10T00:00:00Z',
     };
-
-    service.getRecommendationsForOrder(10).subscribe((result) => {
-      expect(result.id).toBe(1);
-      expect(result.orderId).toBe(10);
-      expect(result.explanation).toBe('Estilo ofensivo y clásico');
-      expect(result.recommendations.length).toBe(1);
-      expect(result.isFallback).toBe(false);
-      expect(service.status()).toBe('COMPLETED');
-    });
-
-    const req = httpTesting.expectOne(
-      `${environment.apiGateway}${environment.endpoints.recommendation}/orders/10`
-    );
+    let res: unknown;
+    service.getRecomendaciones().subscribe((r) => (res = r));
+    const req = http.expectOne(url);
     expect(req.request.method).toBe('GET');
-    req.flush(mockBackendResponse);
+    req.flush(body);
+    expect(res).toEqual(body);
   });
 
-  it('debe degradar elegantemente al catálogo cuando el microservicio devuelve 404 (worker asíncrono)', () => {
-    service.getRecommendationsForOrder(42).subscribe((result) => {
-      expect(result.orderId).toBe(42);
-      expect(result.isFallback).toBe(true);
-      expect(result.recommendations.length).toBe(2);
-      expect(result.recommendations[0].name).toBe('Camiseta Titular 2026');
-      expect(result.recommendations[0].matchedProduct).toEqual(mockProducts[0]);
-      expect(service.status()).toBe('COMPLETED');
-    });
-
-    const req = httpTesting.expectOne(
-      `${environment.apiGateway}${environment.endpoints.recommendation}/orders/42`
-    );
-    req.flush('Not Found', { status: 404, statusText: 'Not Found' });
+  it('lista vacía sin historial (no inventa recomendaciones)', () => {
+    let items: unknown[] | undefined;
+    service.getRecomendaciones().subscribe((r) => (items = r.items));
+    http.expectOne(url).flush({ items: [], perfil: {}, generadoEn: null });
+    expect(items).toEqual([]);
   });
 
-  it('debe manejar estado UNAVAILABLE cuando tanto el backend como el catálogo fallan', () => {
-    catalogService.getProducts = () => throwError(() => new Error('Catalogo offline'));
+  it('propaga 403 como ApiError forbidden, sin fallback', () => {
+    let err: ApiError | undefined;
+    service.getRecomendaciones().subscribe({ error: (e) => (err = e) });
+    http.expectOne(url).flush({}, { status: 403, statusText: 'Forbidden' });
+    expect(err?.kind).toBe('forbidden');
+  });
 
-    service.getRecommendationsForOrder(99).subscribe((result) => {
-      expect(result.recommendations).toEqual([]);
-      expect(service.status()).toBe('UNAVAILABLE');
-      expect(service.errorMessage()).toContain('No se pudieron cargar');
+  describe('GET /api/v1/recomendaciones (modelo)', () => {
+    const modeloUrl = `${environment.apiGateway}/api/v1/recomendaciones`;
+
+    it('200 -> devuelve fuente, versión e ítems tal cual', () => {
+      const body = {
+        fuente: 'MODELO',
+        versionModelo: 'v3',
+        items: [
+          {
+            posicion: 1,
+            sku: 'CAM-1',
+            puntaje: 12.5,
+            score: 0.8,
+            nombre: 'Local',
+            categoria: 'Fútbol',
+            precio: 100,
+          },
+        ],
+      };
+      let res: unknown;
+      service.getRecomendacionesModelo().subscribe((r) => (res = r));
+      const req = http.expectOne(modeloUrl);
+      expect(req.request.method).toBe('GET');
+      expect(req.request.url).not.toMatch(/userId/);
+      req.flush(body);
+      expect(res).toEqual(body);
     });
 
-    const req = httpTesting.expectOne(
-      `${environment.apiGateway}${environment.endpoints.recommendation}/orders/99`
-    );
-    req.flush('Error', { status: 500, statusText: 'Internal Error' });
+    it.each([
+      [401, 'unauthenticated'],
+      [403, 'forbidden'],
+      [404, 'not_found'],
+      [503, 'unavailable'],
+    ])('%i -> ApiError %s', (status, kind) => {
+      let err: ApiError | undefined;
+      service.getRecomendacionesModelo().subscribe({ error: (e) => (err = e) });
+      http.expectOne(modeloUrl).flush({}, { status, statusText: 'x' });
+      expect(err?.kind).toBe(kind);
+    });
   });
 });

@@ -1,10 +1,32 @@
-import { Component, signal, inject, OnInit } from '@angular/core';
+import { Component, signal, inject, OnInit, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { CognitoAuthService } from '../../core/services/cognito-auth.service';
 import { environment } from '../../../environments/environment';
 
+type Modo = 'login' | 'registro';
+
+const RUTA_POR_DEFECTO = '/catalog';
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Política por defecto de Cognito (la Lambda/Cognito es la fuente de verdad). */
+const PASSWORD = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+
+/**
+ * Solo rutas internas: evita redirecciones abiertas (`//evil.com`, `https://...`) y volver al login.
+ */
+export function rutaSegura(url: string | null | undefined): string {
+  if (!url || !url.startsWith('/') || url.startsWith('//') || url.startsWith('/\\')) {
+    return RUTA_POR_DEFECTO;
+  }
+  return url.startsWith('/auth') ? RUTA_POR_DEFECTO : url;
+}
+
+/**
+ * Login y registro. Opciones: cuenta Camisetas360 (Cognito vía Lambda: iniciar sesión o crear
+ * cuenta), Microsoft Entra ID y el portal de Cognito. Respeta `returnUrl` (p. ej. el producto que
+ * se quería comprar) y `motivo=comprar` muestra por qué se pide la sesión.
+ */
 @Component({
   selector: 'app-login',
   standalone: true,
@@ -12,169 +34,307 @@ import { environment } from '../../../environments/environment';
   template: `
     <div class="flex min-h-[75vh] items-center justify-center px-4 py-8">
       <div class="w-full max-w-md">
-        <!-- Tarjeta Principal -->
-        <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-          <!-- Header con gradiente -->
-          <div class="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 px-8 py-8 text-center text-white">
-            <div class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-sm shadow-inner">
-              <svg class="h-7 w-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-              </svg>
-            </div>
-            <h1 class="text-2xl font-extrabold tracking-tight">CAMISETAS 360</h1>
-            <p class="mt-1 text-xs text-blue-200/80">Plataforma de E-commerce y Microservicios</p>
-          </div>
+        <div class="border-t border-ink">
+          <h1 class="album-display pt-8 text-[clamp(34px,6vw,48px)]">
+            {{ modo() === 'registro' ? 'Crea tu cuenta' : 'Inicia sesión' }}
+          </h1>
 
-          <!-- Body -->
-          <div class="px-8 py-6">
+          <div class="py-6">
             @if (authService.isLoggedIn()) {
-              <!-- Estado Autenticado -->
-              <div class="text-center py-2">
-                <div class="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 shadow-sm">
+              <div class="py-2 text-center">
+                <div
+                  class="mx-auto mb-4 flex h-16 w-16 items-center justify-center border border-ink text-ink"
+                >
                   <span class="text-xl font-bold">{{ authService.userInitials() }}</span>
                 </div>
-                <h2 class="text-lg font-semibold text-slate-800">¡Hola, {{ authService.activeUser() }}!</h2>
+                <h2 class="text-lg font-semibold text-slate-800">
+                  ¡Hola, {{ authService.activeUser() }}!
+                </h2>
                 <p class="mt-1 text-xs text-slate-500">{{ authService.userEmail() }}</p>
-
-                <!-- Badges de proveedor y rol -->
                 <div class="mt-3 flex items-center justify-center gap-2">
-                  <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                    <svg class="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                    </svg>
-                    {{ authService.authProvider() === 'cognito' ? 'AWS Cognito' : 'Azure Entra ID' }}
+                  <span
+                    class="album-caps inline-flex items-center border border-ink px-2.5 py-1 text-[10px] text-ink"
+                  >
+                    {{
+                      authService.authProvider() === 'cognito' ? 'AWS Cognito' : 'Azure Entra ID'
+                    }}
                   </span>
                   @for (role of authService.userRoles(); track role) {
-                    <span class="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 border border-blue-200">
+                    <span class="album-caps px-2 py-1 text-[10px] text-pitch">
                       {{ role }}
                     </span>
                   }
                 </div>
-
                 <div class="mt-6 flex flex-col gap-2">
                   <button
-                    (click)="goToCatalog()"
-                    class="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98]">
+                    type="button"
+                    (click)="continuar()"
+                    class="album-caps flex w-full items-center justify-center bg-ink px-5 py-4 text-[11px] text-paper transition-colors hover:bg-pitch"
+                  >
                     Ir al Catálogo de Camisetas
                   </button>
-
                   <button
+                    type="button"
                     (click)="logout()"
-                    class="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-5 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-100 hover:text-red-700 active:scale-[0.98]">
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
+                    class="album-caps flex w-full items-center justify-center border border-ink px-5 py-4 text-[11px] text-ink transition-colors hover:border-red-700 hover:text-red-700"
+                  >
                     Cerrar sesión
                   </button>
                 </div>
               </div>
             } @else {
-              <!-- Formulario de Autenticación con AWS Cognito -->
               <div class="space-y-4">
-                <div class="text-center pb-2 border-b border-slate-100">
-                  <h3 class="text-sm font-bold text-slate-800">Iniciar Sesión con AWS Cognito</h3>
-                  <p class="text-xs text-slate-500 mt-0.5">Ingresa con tus credenciales de usuario de Amazon Cognito</p>
-                </div>
-
-                <!-- Mensaje de Error -->
-                @if (errorMessage()) {
-                  <div class="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
-                    {{ errorMessage() }}
-                  </div>
+                @if (motivoCompra()) {
+                  <p role="status" class="border-y border-pitch py-3 text-sm text-pitch">
+                    <strong>Para comprar necesitas una cuenta.</strong> Inicia sesión o crea una
+                    cuenta y te llevamos de vuelta a la camiseta.
+                  </p>
                 }
 
-                <!-- Inputs de Inicio de Sesión -->
-                <form (ngSubmit)="loginWithCognito()" class="space-y-3">
-                  <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1">Correo Electrónico</label>
-                    <input
-                      type="email"
-                      [(ngModel)]="email"
-                      name="email"
-                      required
-                      placeholder="usuario@camisetas360.com"
-                      class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
-                    />
-                  </div>
-
-                  <div>
-                    <label class="block text-xs font-semibold text-slate-600 mb-1">Contraseña</label>
-                    <input
-                      type="password"
-                      [(ngModel)]="password"
-                      name="password"
-                      required
-                      placeholder="••••••••••••"
-                      class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
-                    />
-                  </div>
-
-                  <!-- Botón Principal Cognito -->
+                <!-- Pestañas -->
+                <div
+                  role="tablist"
+                  aria-label="Acceso"
+                  class="grid grid-cols-2 border-b border-rule"
+                >
                   <button
-                    type="submit"
-                    [disabled]="loading()"
-                    class="group relative flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-5 py-3 text-sm font-bold text-white shadow-md shadow-amber-500/20 transition-all duration-200 hover:from-amber-600 hover:to-amber-700 hover:shadow-lg active:scale-[0.98] disabled:opacity-50">
-                    @if (loading()) {
-                      <svg class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                      </svg>
-                      <span>Autenticando con Cognito...</span>
-                    } @else {
-                      <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                      </svg>
-                      <span>Iniciar Sesión con Cognito</span>
-                    }
+                    type="button"
+                    role="tab"
+                    id="tab-login"
+                    aria-controls="panel-acceso"
+                    [attr.aria-selected]="modo() === 'login'"
+                    (click)="cambiarModo('login')"
+                    class="album-caps -mb-px border-b-2 px-3 py-3 text-[11px] transition-colors"
+                    [class]="
+                      modo() === 'login'
+                        ? 'border-ink text-ink'
+                        : 'border-transparent text-slate-600 hover:text-ink'
+                    "
+                  >
+                    Iniciar sesión
                   </button>
-                </form>
-
-                <!-- Acceso Rápido Demo -->
-                <button
-                  type="button"
-                  (click)="loginWithDemoCredentials()"
-                  [disabled]="loading()"
-                  class="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50/70 px-4 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100/80 active:scale-[0.98]">
-                  <span>Acceso rápido (Usuario Demo Cognito)</span>
-                </button>
-
-                <!-- Divider -->
-                <div class="relative my-4 flex items-center justify-center">
-                  <div class="w-full border-t border-slate-200"></div>
-                  <span class="absolute bg-white px-3 text-[11px] font-medium text-slate-400 uppercase tracking-wider">Otras Opciones</span>
+                  <button
+                    type="button"
+                    role="tab"
+                    id="tab-registro"
+                    aria-controls="panel-acceso"
+                    [attr.aria-selected]="modo() === 'registro'"
+                    (click)="cambiarModo('registro')"
+                    class="album-caps -mb-px border-b-2 px-3 py-3 text-[11px] transition-colors"
+                    [class]="
+                      modo() === 'registro'
+                        ? 'border-ink text-ink'
+                        : 'border-transparent text-slate-600 hover:text-ink'
+                    "
+                  >
+                    Crear cuenta
+                  </button>
                 </div>
 
-                <!-- Hosted UI Button -->
-                <button
-                  type="button"
-                  (click)="loginCognitoHostedUI()"
-                  class="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-slate-50 px-4 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-100 active:scale-[0.98]">
-                  <svg class="h-4 w-4 text-amber-600" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                  </svg>
-                  <span>Portal Cognito Hosted UI</span>
-                </button>
+                <div
+                  id="panel-acceso"
+                  role="tabpanel"
+                  [attr.aria-labelledby]="modo() === 'login' ? 'tab-login' : 'tab-registro'"
+                  class="space-y-3"
+                >
+                  @if (errorMessage()) {
+                    <div role="alert" class="border border-red-700 p-3 text-sm text-red-800">
+                      {{ errorMessage() }}
+                    </div>
+                  }
 
-                <!-- Botón Microsoft Entra ID -->
+                  @if (modo() === 'login') {
+                    <form (ngSubmit)="loginWithCognito()" class="space-y-3" novalidate>
+                      <div>
+                        <label
+                          for="email"
+                          class="album-caps mb-1.5 block text-[10px] text-slate-700"
+                          >Correo electrónico</label
+                        >
+                        <input
+                          id="email"
+                          type="email"
+                          [(ngModel)]="email"
+                          name="email"
+                          required
+                          autocomplete="email"
+                          placeholder="tu@correo.com"
+                          class="w-full border border-ink bg-transparent px-3 py-3 text-base text-ink outline-none focus:border-pitch focus:ring-0"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          for="password"
+                          class="album-caps mb-1.5 block text-[10px] text-slate-700"
+                          >Contraseña</label
+                        >
+                        <input
+                          id="password"
+                          type="password"
+                          [(ngModel)]="password"
+                          name="password"
+                          required
+                          autocomplete="current-password"
+                          class="w-full border border-ink bg-transparent px-3 py-3 text-base text-ink outline-none focus:border-pitch focus:ring-0"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        [disabled]="loading()"
+                        class="album-caps flex w-full items-center justify-center bg-ink px-5 py-4 text-[11px] text-paper transition-colors hover:bg-pitch disabled:opacity-50"
+                      >
+                        {{ loading() ? 'Iniciando sesión…' : 'Iniciar sesión' }}
+                      </button>
+                    </form>
+                    <p class="text-center text-xs text-slate-500">
+                      ¿No tienes cuenta?
+                      <button
+                        type="button"
+                        (click)="cambiarModo('registro')"
+                        class="font-semibold text-blue-700 hover:underline"
+                      >
+                        Crea una aquí
+                      </button>
+                    </p>
+                    <button
+                      type="button"
+                      (click)="loginWithDemoCredentials()"
+                      [disabled]="loading()"
+                      class="album-caps flex w-full items-center justify-center border border-dashed border-slot px-4 py-3 text-[10px] text-slate-700 transition-colors hover:border-ink hover:text-ink"
+                    >
+                      Acceso rápido (Usuario Demo Cognito)
+                    </button>
+                  } @else {
+                    <form (ngSubmit)="registrar()" class="space-y-3" novalidate>
+                      <div>
+                        <label
+                          for="nombre"
+                          class="album-caps mb-1.5 block text-[10px] text-slate-700"
+                          >Nombre</label
+                        >
+                        <input
+                          id="nombre"
+                          type="text"
+                          [(ngModel)]="nombre"
+                          name="nombre"
+                          required
+                          maxlength="100"
+                          autocomplete="name"
+                          class="w-full border border-ink bg-transparent px-3 py-3 text-base text-ink outline-none focus:border-pitch focus:ring-0"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          for="email-registro"
+                          class="album-caps mb-1.5 block text-[10px] text-slate-700"
+                          >Correo electrónico</label
+                        >
+                        <input
+                          id="email-registro"
+                          type="email"
+                          [(ngModel)]="email"
+                          name="email"
+                          required
+                          autocomplete="email"
+                          placeholder="tu@correo.com"
+                          class="w-full border border-ink bg-transparent px-3 py-3 text-base text-ink outline-none focus:border-pitch focus:ring-0"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          for="password-registro"
+                          class="album-caps mb-1.5 block text-[10px] text-slate-700"
+                          >Contraseña</label
+                        >
+                        <input
+                          id="password-registro"
+                          type="password"
+                          [(ngModel)]="password"
+                          name="password"
+                          required
+                          autocomplete="new-password"
+                          aria-describedby="password-ayuda"
+                          class="w-full border border-ink bg-transparent px-3 py-3 text-base text-ink outline-none focus:border-pitch focus:ring-0"
+                        />
+                        <p id="password-ayuda" class="mt-1 text-[11px] text-slate-500">
+                          Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo.
+                        </p>
+                      </div>
+                      <div>
+                        <label
+                          for="confirmar"
+                          class="album-caps mb-1.5 block text-[10px] text-slate-700"
+                          >Repite la contraseña</label
+                        >
+                        <input
+                          id="confirmar"
+                          type="password"
+                          [(ngModel)]="confirmar"
+                          name="confirmar"
+                          required
+                          autocomplete="new-password"
+                          class="w-full border border-ink bg-transparent px-3 py-3 text-base text-ink outline-none focus:border-pitch focus:ring-0"
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        [disabled]="loading()"
+                        class="album-caps flex w-full items-center justify-center bg-ink px-5 py-4 text-[11px] text-paper transition-colors hover:bg-pitch disabled:opacity-50"
+                      >
+                        {{ loading() ? 'Creando cuenta…' : 'Crear cuenta' }}
+                      </button>
+                    </form>
+                    <p class="text-center text-xs text-slate-500">
+                      ¿Ya tienes cuenta?
+                      <button
+                        type="button"
+                        (click)="cambiarModo('login')"
+                        class="font-semibold text-blue-700 hover:underline"
+                      >
+                        Inicia sesión
+                      </button>
+                    </p>
+                  }
+                </div>
+
+                <div class="relative my-4 flex items-center justify-center">
+                  <div class="w-full border-t border-slate-200"></div>
+                  <span class="album-caps absolute bg-paper px-3 text-[10px] text-slate-600"
+                    >O continúa con</span
+                  >
+                </div>
+
                 <button
                   type="button"
                   (click)="loginMicrosoft()"
-                  class="group flex w-full items-center justify-center gap-3 rounded-xl border border-slate-300 bg-white px-5 py-2 text-xs font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:border-blue-400 hover:bg-blue-50/50 active:scale-[0.98]">
-                  <!-- Microsoft Icon -->
-                  <svg class="h-4 w-4" viewBox="0 0 21 21" fill="none">
-                    <rect x="1" y="1" width="9" height="9" fill="#F25022"/>
-                    <rect x="11" y="1" width="9" height="9" fill="#7FBA00"/>
-                    <rect x="1" y="11" width="9" height="9" fill="#00A4EF"/>
-                    <rect x="11" y="11" width="9" height="9" fill="#FFB900"/>
+                  class="album-caps flex w-full items-center justify-center gap-3 border border-ink px-5 py-3.5 text-[11px] text-ink transition-colors hover:bg-ink hover:text-paper"
+                >
+                  <svg class="h-4 w-4" viewBox="0 0 21 21" fill="none" aria-hidden="true">
+                    <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+                    <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+                    <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+                    <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
                   </svg>
-                  <span>Acceso Microsoft Entra ID</span>
+                  Microsoft Entra ID
                 </button>
+                <button
+                  type="button"
+                  (click)="loginCognitoHostedUI()"
+                  class="album-caps flex w-full items-center justify-center border border-rule px-4 py-3 text-[10px] text-slate-700 transition-colors hover:border-ink hover:text-ink"
+                >
+                  Portal Cognito Hosted UI
+                </button>
+                @if (modo() === 'registro') {
+                  <p class="text-center text-[11px] text-slate-500">
+                    Las cuentas Microsoft Entra ID las crea el administrador de tu organización; si
+                    no tienes una, crea tu cuenta Camisetas360 arriba.
+                  </p>
+                }
               </div>
             }
           </div>
         </div>
 
-        <!-- Footer -->
         <p class="mt-4 text-center text-xs text-slate-400">
           Camisetas360 · AWS Academy Learner Lab · ECS Fargate & Lambda Serverless
         </p>
@@ -188,78 +348,139 @@ export class LoginComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
-  email = 'usuario@camisetas360.com';
-  password = 'Password123!';
+  nombre = '';
+  email = '';
+  password = '';
+  confirmar = '';
+  readonly modo = signal<Modo>('login');
   readonly loading = signal<boolean>(false);
   readonly errorMessage = signal<string | null>(null);
 
+  private readonly query = this.route.snapshot.queryParamMap;
+  /** A dónde volver tras iniciar sesión (solo rutas internas). */
+  readonly returnUrl = computed(() => rutaSegura(this.query.get('returnUrl')));
+  readonly motivoCompra = computed(() => this.query.get('motivo') === 'comprar');
+
   ngOnInit(): void {
-    // Si viene redirigido desde Cognito Hosted UI con code o tokens
+    if (this.query.get('modo') === 'registro') this.modo.set('registro');
+    // Ya con sesión y con destino explícito (p. ej. volvió del login): seguir de largo.
+    if (this.authService.isLoggedIn() && this.query.get('returnUrl')) {
+      this.router.navigateByUrl(this.returnUrl());
+      return;
+    }
     this.handleCognitoCallback();
   }
 
-  /** Procesa el inicio de sesión con AWS Cognito vía Serverless Lambda */
+  cambiarModo(modo: Modo): void {
+    this.modo.set(modo);
+    this.errorMessage.set(null);
+    this.password = '';
+    this.confirmar = '';
+  }
+
+  /** Inicio de sesión con AWS Cognito vía Lambda. */
   loginWithCognito(): void {
-    if (!this.email || !this.password) {
+    if (!this.email.trim() || !this.password) {
       this.errorMessage.set('Por favor ingresa tu correo y contraseña.');
       return;
     }
-
     this.loading.set(true);
     this.errorMessage.set(null);
-
-    this.cognitoAuth.login(this.email, this.password).subscribe({
-      next: (res) => {
-        this.loading.set(false);
-        this.authService.checkAccount();
-        // Redirigir al catálogo con sesión activa
-        this.router.navigate(['/catalog']);
-      },
-      error: (err) => {
-        this.loading.set(false);
-        this.errorMessage.set(
-          err.message || 'No se pudo iniciar sesión con AWS Cognito. Revisa tus credenciales.'
-        );
-      },
+    this.cognitoAuth.login(this.email.trim(), this.password).subscribe({
+      next: () => this.entrar(),
+      error: (err: Error) => this.fallo(err, 'No se pudo iniciar sesión. Revisa tus credenciales.'),
     });
   }
 
-  /** Inicio de sesión rápido con credenciales demo preconfiguradas */
+  /** Crea la cuenta en Cognito (grupo CUSTOMER) y deja la sesión iniciada. */
+  registrar(): void {
+    const error = this.validarRegistro();
+    if (error) {
+      this.errorMessage.set(error);
+      return;
+    }
+    this.loading.set(true);
+    this.errorMessage.set(null);
+    this.cognitoAuth.register(this.email.trim(), this.password, this.nombre.trim()).subscribe({
+      next: () => this.entrar(),
+      error: (err: Error) => this.fallo(err, 'No se pudo crear la cuenta. Inténtalo nuevamente.'),
+    });
+  }
+
+  /** Inicio de sesión rápido con credenciales demo preconfiguradas. */
   loginWithDemoCredentials(): void {
     this.email = 'usuario@camisetas360.com';
     this.password = 'Password123!';
     this.loginWithCognito();
   }
 
-  /** Procesa callbacks de Hosted UI si se reciben en URL */
-  private handleCognitoCallback(): void {
-    const code = this.route.snapshot.queryParamMap.get('code');
-    if (code) {
-      // Simular resolución de sesión o invocar login demo
-      this.loginWithDemoCredentials();
-    }
+  /** Hosted UI de Cognito (OAuth code + PKCE); al volver se completa en handleCognitoCallback. */
+  loginCognitoHostedUI(): void {
+    this.errorMessage.set(null);
+    this.cognitoAuth
+      .urlHostedUi(this.returnUrl())
+      .then((url) => this.irA(url))
+      .catch(() => this.errorMessage.set('No se pudo abrir el portal de Cognito.'));
   }
 
-  /** Redirige al usuario hacia la interfaz web alojada de Amazon Cognito */
-  loginCognitoHostedUI(): void {
-    const domain = environment.cognito.domain;
-    const clientId = environment.cognito.clientId;
-    const redirectUri = encodeURIComponent(environment.cognito.redirectUri);
-    const scopes = environment.cognito.scopes.join('+');
-
-    const cognitoUrl = `${domain}/login?client_id=${clientId}&response_type=code&scope=${scopes}&redirect_uri=${redirectUri}`;
-    window.location.href = cognitoUrl;
+  /** Navegación fuera de la app (aislada para los tests). */
+  irA(url: string): void {
+    window.location.assign(url);
   }
 
   loginMicrosoft(): void {
-    this.authService.login();
+    this.authService.login(this.returnUrl());
   }
 
   logout(): void {
     this.authService.logout();
   }
 
-  goToCatalog(): void {
-    this.router.navigate(['/catalog']);
+  continuar(): void {
+    this.router.navigateByUrl(this.returnUrl());
+  }
+
+  private validarRegistro(): string | null {
+    if (!this.nombre.trim()) return 'Ingresa tu nombre.';
+    if (!EMAIL.test(this.email.trim())) return 'Ingresa un correo válido.';
+    if (!PASSWORD.test(this.password)) {
+      return 'La contraseña debe tener mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo.';
+    }
+    if (this.password !== this.confirmar) return 'Las contraseñas no coinciden.';
+    return null;
+  }
+
+  private entrar(): void {
+    this.loading.set(false);
+    this.password = '';
+    this.confirmar = '';
+    this.authService.checkAccount();
+    this.router.navigateByUrl(this.returnUrl());
+  }
+
+  private fallo(err: Error, porDefecto: string): void {
+    this.loading.set(false);
+    this.password = '';
+    this.confirmar = '';
+    this.errorMessage.set(err?.message || porDefecto);
+  }
+
+  /** Vuelta del Hosted UI: canjea el código por la sesión del usuario que inició sesión. */
+  private handleCognitoCallback(): void {
+    if (this.query.get('error')) {
+      this.errorMessage.set('Cognito canceló o rechazó el inicio de sesión. Inténtalo nuevamente.');
+      return;
+    }
+    const code = this.query.get('code');
+    if (!code) return;
+    this.loading.set(true);
+    this.cognitoAuth.completarHostedUi(code, this.query.get('state')).subscribe({
+      next: (destino) => {
+        this.loading.set(false);
+        this.authService.checkAccount();
+        this.router.navigateByUrl(rutaSegura(destino));
+      },
+      error: (err: Error) => this.fallo(err, 'No se pudo completar el inicio de sesión.'),
+    });
   }
 }
