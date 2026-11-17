@@ -1,192 +1,457 @@
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
-import { DecimalPipe } from '@angular/common';
-import { CatalogService } from './services/catalog.service';
-import { CartService } from '../cart/services/cart.service';
-import { Product } from '../../core/models/product.model';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  OnInit,
+  afterRenderEffect,
+  computed,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { CatalogService } from '../../core/services/catalog.service';
+import { CartService } from '../../core/services/cart.service';
+import { AuthService } from '../../core/services/auth.service';
+import { KIT_TYPES, KIT_TYPE_LABEL, Product } from '../../core/models/product.model';
+import { ApiError } from '../../core/http/api-error';
+import { ApiErrorComponent } from '../../shared/components/api-error/api-error.component';
+import { ProductImageComponent } from '../../shared/components/product-image/product-image.component';
+import { ClpPipe } from '../../shared/pipes/clp.pipe';
+import { RecommendationsComponent } from '../recommendations/recommendations.component';
+
+/** Una página del álbum: un equipo (o las camisetas sin club) con sus casilleros. */
+interface PaginaAlbum {
+  key: string;
+  titulo: string;
+  liga: string | null;
+  productos: Product[];
+}
+
+const SIN_EQUIPO = 'otras-camisetas';
+const STOCK_BAJO = 5;
+
+export function slug(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function ordenTipo(p: Product): number {
+  return p.kitType ? KIT_TYPES.indexOf(p.kitType) : KIT_TYPES.length;
+}
 
 /**
- * Componente del catálogo de camisetas.
- *
- * Muestra los productos en un grid responsivo de tarjetas con:
- * - Skeleton loaders durante la carga
- * - Datos del contrato público del catálogo
- * - Animaciones de hover (scale + shadow)
- * - Categoría, descripción y stock
- * - Botón "Añadir al carrito" con feedback visual
+ * Catálogo como álbum de la temporada (GET /api/v1/catalog/products): índice de equipos y la
+ * página del equipo elegido con sus casilleros numerados. La lista NO llama al detalle por
+ * producto (eso registra visitas en el backend).
  */
 @Component({
   selector: 'app-catalog',
   standalone: true,
-  imports: [DecimalPipe],
+  imports: [
+    RouterLink,
+    ApiErrorComponent,
+    RecommendationsComponent,
+    ProductImageComponent,
+    ClpPipe,
+  ],
   template: `
-    <!-- Hero Section -->
-    <section class="mb-10">
-      <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 px-8 py-14 text-white">
-        <div class="absolute inset-0 opacity-10">
-          <div class="absolute inset-0" style="background-image: radial-gradient(circle at 25% 50%, rgba(255,255,255,0.15) 0%, transparent 50%), radial-gradient(circle at 75% 50%, rgba(59,130,246,0.2) 0%, transparent 50%)"></div>
-        </div>
-        <div class="relative z-10">
-          <h1 class="text-4xl font-extrabold tracking-tight md:text-5xl">Catálogo de Camisetas</h1>
-          <p class="mt-3 text-lg text-blue-200/80">Explora las camisetas disponibles en nuestro catálogo</p>
-        </div>
-      </div>
-    </section>
+    @if (cartMessage(); as m) {
+      <p
+        role="status"
+        aria-live="polite"
+        class="mb-6 border px-4 py-3 text-sm"
+        [class]="m.ok ? 'border-pitch text-pitch' : 'border-red-700 text-red-800'"
+      >
+        {{ m.text }}
+      </p>
+    }
 
-    <!-- Loading Skeleton -->
-    @if (loading()) {
-      <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        @for (skeleton of skeletons; track skeleton) {
-          <div class="animate-pulse rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div class="h-56 rounded-t-2xl bg-slate-200"></div>
-            <div class="p-5">
-              <div class="mb-3 h-4 w-3/4 rounded bg-slate-200"></div>
-              <div class="mb-2 h-3 w-1/2 rounded bg-slate-200"></div>
-              <div class="mb-4 h-5 w-1/3 rounded bg-slate-200"></div>
-              <div class="h-10 w-full rounded-lg bg-slate-200"></div>
-            </div>
+    <div class="grid border-y border-ink lg:grid-cols-[minmax(260px,320px)_1fr]">
+      <!-- Índice del álbum -->
+      <aside
+        class="flex min-w-0 flex-col border-ink bg-paper-2 px-5 py-5 sm:px-8 lg:block lg:border-r lg:py-10"
+      >
+        <h1 class="album-display text-[20px] sm:text-[36px] lg:text-[30px] xl:text-[32px]">
+          Álbum de camisetas
+        </h1>
+        <p class="tnum mt-2 text-sm text-slate-700 lg:mt-4">
+          {{ products().length }} camisetas · {{ equipos() }}
+          {{ equipos() === 1 ? 'equipo' : 'equipos' }}
+        </p>
+
+        <form
+          class="order-3 mt-4 grid grid-cols-[1fr_auto] items-end gap-4 lg:mt-8 lg:block"
+          role="search"
+          (submit)="$event.preventDefault()"
+        >
+          <div>
+            <label for="buscar" class="album-caps text-[10px] text-slate-700">Buscar</label>
+            <input
+              id="buscar"
+              type="search"
+              [value]="query()"
+              (input)="query.set($any($event.target).value)"
+              placeholder="Equipo, camiseta o código"
+              class="mt-2 w-full border-0 border-b border-ink bg-transparent px-0 py-2 text-base focus:border-pitch focus:outline-none focus:ring-0"
+            />
           </div>
+          @if (categories().length > 1) {
+            <div>
+              <label for="categoria" class="album-caps block text-[10px] text-slate-700 lg:mt-6"
+                >Categoría</label
+              >
+              <select
+                id="categoria"
+                [value]="category()"
+                (change)="category.set($any($event.target).value)"
+                class="mt-2 w-full border-0 border-b border-ink bg-transparent px-0 py-2 text-sm focus:outline-none focus:ring-0"
+              >
+                <option value="">Todas</option>
+                @for (c of categories(); track c) {
+                  <option [value]="c">{{ c }}</option>
+                }
+              </select>
+            </div>
+          }
+        </form>
+
+        @if (!loading() && !error() && paginas().length) {
+          <nav aria-label="Índice de equipos" class="order-2 mt-4 lg:mt-8">
+            <ol
+              #indice
+              class="-mx-5 flex overflow-x-auto px-5 lg:mx-0 lg:block lg:overflow-visible lg:px-0"
+            >
+              @for (pg of paginas(); track pg.key) {
+                <li class="shrink-0 lg:border-t lg:border-rule">
+                  <button
+                    type="button"
+                    (click)="abrir(pg.key)"
+                    [attr.data-equipo]="pg.key"
+                    [attr.aria-current]="pg.key === actual()?.key ? 'page' : null"
+                    class="flex w-full flex-col items-start gap-0.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-left lg:flex-row lg:items-baseline lg:justify-between lg:gap-4 lg:whitespace-normal text-[13px] font-semibold uppercase tracking-[0.12em] transition-colors lg:border-b-0 lg:px-0 lg:py-2.5"
+                    [class]="
+                      pg.key === actual()?.key
+                        ? 'border-pitch text-pitch'
+                        : 'border-transparent text-ink hover:text-pitch'
+                    "
+                  >
+                    <span>{{ pg.titulo }}</span>
+                    <span
+                      class="tnum shrink-0 whitespace-nowrap text-[11px] tracking-[0.08em] text-slate-600 lg:text-[12px]"
+                      >{{ rango(pg) }}</span
+                    >
+                  </button>
+                </li>
+              }
+            </ol>
+          </nav>
         }
-      </div>
-    }
+      </aside>
 
-    <!-- Error State -->
-    @if (error()) {
-      <div class="mx-auto max-w-md rounded-2xl border border-red-200 bg-red-50 p-8 text-center">
-        <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-100">
-          <svg class="h-7 w-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <h3 class="text-lg font-semibold text-red-800">Error al cargar el catálogo</h3>
-        <p class="mt-1 text-sm text-red-600">{{ error() }}</p>
-        <button (click)="loadProducts()" class="mt-4 rounded-lg bg-red-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-red-700">
-          Reintentar
-        </button>
-      </div>
-    }
-
-    <!-- Product Grid -->
-    @if (!loading() && !error()) {
-      <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        @for (product of products(); track product.sku) {
-          <div class="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
-            <!-- Image -->
-            <div class="relative h-56 overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200">
-              <div class="flex h-full items-center justify-center text-sm text-slate-500" role="img" aria-label="Imagen temporal: fotografía no disponible">Imagen no disponible</div>
-
-              <!-- Categoría -->
-              <span class="absolute left-3 top-3 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur-sm">
-                {{ product.category }}
-              </span>
-
-              <!-- Stock Badge -->
-              @if (product.stock <= 5 && product.stock > 0) {
-                <span class="absolute right-3 top-3 rounded-full bg-amber-500 px-3 py-1 text-xs font-bold text-white shadow-sm">
-                  ¡Últimas {{ product.stock }}!
-                </span>
+      <!-- Página del equipo -->
+      <section class="min-w-0 px-5 py-6 sm:px-8 sm:py-8 lg:px-12 lg:py-10">
+        @if (loading()) {
+          <div aria-busy="true" aria-label="Cargando el álbum">
+            <div class="h-16 w-2/3 animate-pulse bg-paper-2"></div>
+            <div class="mt-10 grid gap-8 sm:grid-cols-2 xl:grid-cols-3">
+              @for (s of skeletons; track s) {
+                <div class="album-slot aspect-[4/5] animate-pulse"></div>
               }
             </div>
+          </div>
+        } @else if (error()) {
+          <div class="max-w-md">
+            <app-api-error
+              [error]="error()"
+              title="Error al cargar el catálogo"
+              (retry)="loadProducts()"
+            />
+          </div>
+        } @else if (actual(); as pg) {
+          @for (p of [pg]; track p.key) {
+            <div class="animate-page-turn">
+              <header class="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+                <h2
+                  class="album-display hyphens-auto text-[clamp(34px,8vw,112px)] [overflow-wrap:anywhere]"
+                  lang="es"
+                >
+                  {{ pg.titulo }}
+                </h2>
+                <p class="album-caps pb-2 text-[11px] text-slate-700">
+                  {{ pg.liga ?? 'Sin liga' }} · {{ pg.productos.length }}
+                  {{ pg.productos.length === 1 ? 'camiseta' : 'camisetas' }}
+                </p>
+              </header>
 
-            <!-- Content -->
-            <div class="p-5">
-              <h3 class="text-lg font-bold text-slate-800">{{ product.name }}</h3>
-              <p class="mt-0.5 text-sm text-slate-500">{{ product.description }}</p>
+              <div class="mt-6 grid gap-x-8 gap-y-12 sm:mt-8 sm:grid-cols-2 xl:grid-cols-3">
+                @for (product of pg.productos; track product.sku) {
+                  <article class="flex flex-col">
+                    <div
+                      class="album-slot relative aspect-[2/1] overflow-hidden sm:aspect-[4/3] xl:aspect-square"
+                    >
+                      <span
+                        class="tnum animate-tick absolute left-3 top-2.5 z-10 text-[13px] font-bold tracking-[0.16em] text-pitch"
+                        >{{ numero(product) }}</span
+                      >
+                      @if (product.stock > 0 && product.stock <= stockBajo) {
+                        <span class="album-caps absolute right-3 top-2.5 z-10 text-[10px] text-ink"
+                          >Últimas {{ product.stock }}</span
+                        >
+                      }
+                      <app-product-image
+                        class="h-full p-6"
+                        [sku]="product.sku"
+                        [version]="product.imageVersion"
+                        [alt]="product.name"
+                      />
+                    </div>
 
-              <div class="mt-3 flex items-baseline gap-1">
-                <span class="text-2xl font-extrabold text-blue-600">{{ product.price | number:'1.2-2' }}</span>
-                <span class="text-sm font-medium text-slate-400">COP</span>
+                    <div
+                      class="mt-4 flex items-baseline justify-between gap-4 border-b border-ink pb-2"
+                    >
+                      <h3 class="album-caps text-[13px]">{{ tipo(product) }}</h3>
+                      <span class="tnum animate-tick text-lg font-bold">{{
+                        product.price | clp
+                      }}</span>
+                    </div>
+                    <a
+                      [routerLink]="['/catalog', product.sku]"
+                      class="mt-3 text-[15px] leading-snug text-ink underline-offset-4 hover:underline"
+                      >{{ product.name }}</a
+                    >
+                    <p class="tnum animate-tick mt-1 text-sm text-slate-600">
+                      {{ product.stock > 0 ? product.stock + ' disponibles' : 'Agotada' }} ·
+                      {{ product.sku }}
+                    </p>
+
+                    <div class="mt-auto pt-5">
+                      @if (auth.isCustomer()) {
+                        <button
+                          type="button"
+                          (click)="addToCart(product)"
+                          [disabled]="product.stock <= 0 || adding() === product.sku"
+                          [attr.aria-label]="'Añadir ' + product.name + ' al carrito'"
+                          class="album-caps w-full bg-ink py-3.5 text-[11px] text-paper transition-colors hover:bg-pitch disabled:cursor-not-allowed disabled:bg-transparent disabled:text-slate-500 disabled:outline disabled:outline-1 disabled:outline-rule"
+                        >
+                          {{
+                            product.stock <= 0
+                              ? 'Agotado'
+                              : adding() === product.sku
+                                ? 'Añadiendo…'
+                                : 'Añadir'
+                          }}
+                        </button>
+                      } @else if (!auth.isLoggedIn()) {
+                        <button
+                          type="button"
+                          (click)="comprarSinSesion(product)"
+                          [disabled]="product.stock <= 0"
+                          [attr.aria-label]="'Comprar ' + product.name"
+                          class="album-caps w-full bg-ink py-3.5 text-[11px] text-paper transition-colors hover:bg-pitch disabled:cursor-not-allowed disabled:bg-transparent disabled:text-slate-500 disabled:outline disabled:outline-1 disabled:outline-rule"
+                        >
+                          {{ product.stock <= 0 ? 'Agotado' : 'Comprar' }}
+                        </button>
+                      }
+                    </div>
+                  </article>
+                }
               </div>
-
-              <p class="mt-3 text-sm text-slate-500">SKU: {{ product.sku }} · Stock: {{ product.stock }}</p>
-              <p class="mt-1 text-sm font-semibold" [class.text-emerald-700]="product.stock > 0" [class.text-slate-500]="product.stock <= 0">
-                {{ product.stock > 0 ? 'Disponible' : 'Sin stock' }}
-              </p>
-              <p class="mt-1 text-xs text-slate-500">Tallas no informadas por el catálogo.</p>
-
-              <!-- Botón Agregar -->
-              <button
-                (click)="addToCart(product)"
-                [disabled]="product.stock <= 0"
-                [class]="product.stock <= 0
-                  ? 'cursor-not-allowed bg-slate-200 text-slate-400'
-                  : 'bg-slate-900 text-white hover:bg-blue-600 active:scale-[0.97]'"
-                class="mt-4 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-bold transition-all duration-200">
-                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
-                </svg>
-                {{ product.stock <= 0 ? 'Agotado' : addedProductId() === product.sku ? 'Añadido al carrito' : 'Añadir al Carrito' }}
-              </button>
             </div>
+          }
+        } @else {
+          <div class="py-16">
+            <h2 class="album-display text-[40px]">
+              {{
+                products().length === 0
+                  ? 'No hay productos disponibles'
+                  : 'Ningún producto coincide con tu búsqueda'
+              }}
+            </h2>
+            <p class="mt-4 max-w-md text-slate-700">
+              {{
+                products().length === 0
+                  ? 'El álbum todavía no tiene camisetas.'
+                  : 'Prueba con otro equipo, tipo de camiseta o código.'
+              }}
+            </p>
           </div>
         }
-      </div>
+      </section>
+    </div>
 
-      <!-- Empty State -->
-      @if (products().length === 0) {
-        <div class="py-20 text-center">
-          <svg class="mx-auto h-16 w-16 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-          </svg>
-          <h3 class="mt-4 text-lg font-semibold text-slate-600">No hay productos disponibles</h3>
-          <p class="mt-1 text-sm text-slate-400">Vuelve pronto, estamos actualizando nuestro catálogo.</p>
-        </div>
-      }
+    @if (auth.isCustomer()) {
+      <app-recommendations title="Recomendado para ti" fuente="modelo" />
     }
   `,
 })
 export class CatalogComponent implements OnInit {
-  /** Lista de productos cargados del catálogo */
-  readonly products = signal<Product[]>([]);
-
-  /** Estado de carga */
-  readonly loading = signal<boolean>(true);
-
-  /** Mensaje de error si falla la carga */
-  readonly error = signal<string>('');
-
-
-  /** Array para generar skeleton loaders */
-  readonly skeletons = Array.from({ length: 8 }, (_, index) => index);
-
-  /** Señal temporal para el feedback de "añadido" */
-  readonly addedProductId = signal<string>('');
-
+  private readonly catalogService = inject(CatalogService);
+  private readonly cartService = inject(CartService);
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
 
-  constructor(
-    private readonly catalogService: CatalogService,
-    private readonly cartService: CartService
-  ) {}
+  readonly products = signal<Product[]>([]);
+  readonly loading = signal<boolean>(true);
+  readonly error = signal<ApiError | null>(null);
+  readonly query = signal('');
+  readonly category = signal('');
+  readonly adding = signal<string>('');
+  readonly cartMessage = signal<{ ok: boolean; text: string } | null>(null);
+  /** Equipo pedido por la URL (?equipo=arsenal) o por el índice. */
+  readonly equipo = signal<string | null>(null);
+  readonly skeletons = [0, 1, 2];
+  readonly stockBajo = STOCK_BAJO;
 
-  ngOnInit(): void {
-    this.loadProducts();
-  }
+  readonly categories = computed(() =>
+    [
+      ...new Set(
+        this.products()
+          .map((p) => p.category)
+          .filter(Boolean),
+      ),
+    ].sort(),
+  );
 
-  /** Carga los productos desde el servicio de catálogo */
-  loadProducts(): void {
-    this.loading.set(true);
-    this.error.set('');
+  readonly filtered = computed(() => {
+    const q = this.query().trim().toLowerCase();
+    const cat = this.category();
+    return this.products().filter(
+      (p) =>
+        (!cat || p.category === cat) &&
+        (!q ||
+          [p.name, p.sku, p.description, p.team, p.kitType ? KIT_TYPE_LABEL[p.kitType] : null].some(
+            (v) => v?.toLowerCase().includes(q),
+          )),
+    );
+  });
 
-    this.catalogService.getProducts().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: (data) => {
-        this.products.set(data);
-        this.loading.set(false);
-      },
-      error: () => {
-        this.error.set('No se pudieron cargar los productos. Inténtalo de nuevo en unos momentos.');
-        this.loading.set(false);
-      },
+  /** Orden del álbum completo: estable, no cambia al filtrar. */
+  private readonly ordenAlbum = computed(() => agrupar(this.products()));
+
+  private readonly numeros = computed(() => {
+    const m = new Map<string, number>();
+    let n = 0;
+    for (const pg of this.ordenAlbum()) for (const p of pg.productos) m.set(p.sku, ++n);
+    return m;
+  });
+
+  readonly paginas = computed(() => agrupar(this.filtered()));
+
+  /** Equipos reales del álbum (sin contar «Otras camisetas»). */
+  readonly equipos = computed(() => this.ordenAlbum().filter((p) => p.key !== SIN_EQUIPO).length);
+
+  private readonly indice = viewChild<ElementRef<HTMLOListElement>>('indice');
+
+  constructor() {
+    // En móvil el índice es una tira horizontal: la pestaña activa se centra al pasar la página
+    // (scrollLeft del contenedor, para no mover la página en vertical).
+    afterRenderEffect(() => {
+      const key = this.actual()?.key;
+      const ol = this.indice()?.nativeElement;
+      if (!key || !ol || ol.scrollWidth <= ol.clientWidth) return;
+      const btn = ol.querySelector<HTMLElement>(`[data-equipo="${key}"]`);
+      if (btn) ol.scrollLeft = btn.offsetLeft - (ol.clientWidth - btn.offsetWidth) / 2;
     });
   }
 
-  /** El backend no informa tallas: se agrega por SKU. */
+  readonly actual = computed<PaginaAlbum | null>(() => {
+    const pgs = this.paginas();
+    return pgs.find((p) => p.key === this.equipo()) ?? pgs[0] ?? null;
+  });
+
+  ngOnInit(): void {
+    this.route.queryParamMap
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((q) => this.equipo.set(q.get('equipo')));
+    this.loadProducts();
+  }
+
+  loadProducts(): void {
+    this.loading.set(true);
+    this.error.set(null);
+    this.catalogService
+      .getProducts()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (data) => {
+          this.products.set(data);
+          this.loading.set(false);
+        },
+        error: (e: ApiError) => {
+          this.error.set(e);
+          this.loading.set(false);
+        },
+      });
+  }
+
+  /** Pasa la página: el equipo queda en la URL para compartirla o volver con atrás. */
+  abrir(key: string): void {
+    this.equipo.set(key);
+    this.router.navigate([], { relativeTo: this.route, queryParams: { equipo: key } });
+  }
+
+  numero(p: Product): string {
+    return String(this.numeros().get(p.sku) ?? 0).padStart(3, '0');
+  }
+
+  rango(pg: PaginaAlbum): string {
+    const ns = pg.productos.map((p) => this.numero(p));
+    return ns.length > 1 ? `${ns[0]}–${ns[ns.length - 1]}` : ns[0];
+  }
+
+  tipo(p: Product): string {
+    return p.kitType ? KIT_TYPE_LABEL[p.kitType] : p.category;
+  }
+
+  /** Sin sesión: al login (o a crear cuenta) y, al volver, al detalle de la camiseta. */
+  comprarSinSesion(product: Product): void {
+    this.router.navigate(['/auth/login'], {
+      queryParams: { returnUrl: `/catalog/${product.sku}`, motivo: 'comprar' },
+    });
+  }
+
   addToCart(product: Product): void {
     if (product.stock <= 0) return;
-    this.cartService.addToCart(product, '');
-
-    // Feedback visual temporal
-    this.addedProductId.set(product.sku);
-    setTimeout(() => this.addedProductId.set(''), 1500);
+    this.adding.set(product.sku);
+    this.cartService.addItem(product, 1).subscribe({
+      next: () => {
+        this.adding.set('');
+        this.cartMessage.set({ ok: true, text: `${product.name} se añadió al carrito.` });
+      },
+      error: (e: ApiError) => {
+        this.adding.set('');
+        this.cartMessage.set({ ok: false, text: e.message });
+      },
+    });
   }
+}
+
+function agrupar(productos: Product[]): PaginaAlbum[] {
+  const porEquipo = new Map<string, PaginaAlbum>();
+  for (const p of productos) {
+    const titulo = p.team?.trim() || 'Otras camisetas';
+    const key = p.team?.trim() ? slug(titulo) : SIN_EQUIPO;
+    const pg = porEquipo.get(key) ?? { key, titulo, liga: null, productos: [] };
+    pg.liga ??= p.league ?? null;
+    pg.productos.push(p);
+    porEquipo.set(key, pg);
+  }
+  return [...porEquipo.values()]
+    .sort((a, b) =>
+      a.key === SIN_EQUIPO ? 1 : b.key === SIN_EQUIPO ? -1 : a.titulo.localeCompare(b.titulo, 'es'),
+    )
+    .map((pg) => ({
+      ...pg,
+      productos: [...pg.productos].sort(
+        (a, b) => ordenTipo(a) - ordenTipo(b) || a.name.localeCompare(b.name, 'es'),
+      ),
+    }));
 }

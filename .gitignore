@@ -49,3 +49,6 @@ pnpm-debug.log*
 # Archivos de entorno locales (Por seguridad, si decides usar .env localmente)
 .env
 .env.*
+# Configuración generada desde .env (scripts/write-env.mjs)
+!.env.example
+/src/environments/env.generated.ts

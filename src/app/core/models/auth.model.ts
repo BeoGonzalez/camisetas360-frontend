@@ -1,6 +1,10 @@
+/** GET /api/v1/auth/profile (UserProfileDTO). Sincroniza el perfil tras el login. */
 export interface UserProfile {
-  id: string;
+  userId: string;
+  tenantId: string;
   email: string;
   name: string;
-  message: string;
 }
+
+/** Roles de aplicación de Entra (claim `roles`). */
+export type AppRole = 'CUSTOMER' | 'CATALOG_MANAGER' | 'ADMIN';

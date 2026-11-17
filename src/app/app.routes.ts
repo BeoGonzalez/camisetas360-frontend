@@ -1,39 +1,48 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
+import { roleGuard } from './core/guards/role.guard';
 
 /**
- * Rutas principales de la aplicación.
- *
- * Cada feature se carga de forma lazy con loadChildren para optimizar
- * el tamaño del bundle inicial. Las rutas protegidas usan authGuard.
+ * Rutas principales. Cada feature se carga lazy. Los guards por rol solo ocultan/evitan
+ * navegación: la seguridad real (rol + scope) la aplica el backend.
  */
 export const routes: Routes = [
   {
     path: 'catalog',
-    loadChildren: () =>
-      import('./features/catalog/catalog.routes').then((m) => m.CATALOG_ROUTES),
+    // Público: cualquier visitante (sin sesión, Cognito o Entra) puede ver el catálogo.
+    loadChildren: () => import('./features/catalog/catalog.routes').then((m) => m.CATALOG_ROUTES),
   },
   {
     path: 'carrito',
-    loadChildren: () =>
-      import('./features/cart/cart.routes').then((m) => m.CART_ROUTES),
-    canActivate: [authGuard],
+    loadChildren: () => import('./features/cart/cart.routes').then((m) => m.CART_ROUTES),
+    canActivate: [roleGuard('CUSTOMER')],
+  },
+  {
+    path: 'pedidos',
+    loadChildren: () => import('./features/orders/orders.routes').then((m) => m.ORDERS_ROUTES),
+    canActivate: [roleGuard('CUSTOMER')],
   },
   {
     path: 'auth',
-    loadChildren: () =>
-      import('./features/auth/auth.routes').then((m) => m.AUTH_ROUTES),
+    loadChildren: () => import('./features/auth/auth.routes').then((m) => m.AUTH_ROUTES),
   },
   {
     path: 'perfil',
-    loadChildren: () =>
-      import('./features/profile/profile.routes').then((m) => m.PROFILE_ROUTES),
+    loadChildren: () => import('./features/profile/profile.routes').then((m) => m.PROFILE_ROUTES),
     canActivate: [authGuard],
   },
   {
     path: 'pago',
-    loadChildren: () =>
-      import('./features/pago/pago.routes').then((m) => m.PAGO_ROUTES),
+    loadChildren: () => import('./features/pago/pago.routes').then((m) => m.PAGO_ROUTES),
+  },
+  {
+    path: 'admin',
+    loadChildren: () => import('./features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
+  },
+  {
+    path: 'sin-permiso',
+    loadComponent: () =>
+      import('./shared/components/forbidden/forbidden.component').then((m) => m.ForbiddenComponent),
   },
   { path: '', redirectTo: 'catalog', pathMatch: 'full' },
   { path: '**', redirectTo: 'catalog' },

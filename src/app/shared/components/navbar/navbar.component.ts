@@ -1,188 +1,217 @@
 import { Component, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
-import { CartService } from '../../../features/cart/services/cart.service';
+import { CartService } from '../../../core/services/cart.service';
 import { NotificationCenterComponent } from '../../../features/notifications/notification-center.component';
 
+const LINK =
+  'album-caps text-[11px] text-slate-700 underline-offset-[7px] decoration-1 transition-colors hover:text-ink hover:underline';
+const LINK_ACTIVO = '!text-ink underline';
+
 /**
- * Componente de barra de navegación principal.
- *
- * Incluye:
- * - Logo con gradiente de Camisetas360
- * - Navegación con RouterLink activo
- * - Badge de cantidad del carrito (reactivo)
- * - Botón de centro de notificaciones (RabbitMQ / SMTP)
- * - Botón login/logout dinámico
- * - Menú hamburguesa responsive
- * - Efecto glassmorphism en scroll
+ * Encabezado del álbum: franja de tinta con el estado de la temporada, logotipo espaciado y
+ * navegación en mayúsculas sobre papel, cerrada por una regla de tinta. Solo muestra lo que el
+ * rol puede usar (la autorización real es del backend).
  */
 @Component({
   selector: 'app-navbar',
   standalone: true,
   imports: [RouterLink, RouterLinkActive, NotificationCenterComponent],
   template: `
-    <nav class="sticky top-0 z-50 border-b border-white/10 bg-slate-900/95 backdrop-blur-xl">
-      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div class="flex h-16 items-center justify-between">
-          <!-- Logo -->
-          <a routerLink="/catalog" class="flex items-center gap-2.5">
-            <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-extrabold text-white shadow-lg shadow-blue-500/25">
-              C3
-            </div>
-            <span class="text-lg font-extrabold tracking-wider text-white">
-              CAMISETAS<span class="text-blue-400">360</span>
-            </span>
-          </a>
+    <div
+      class="album-caps flex h-8 items-center justify-center bg-ink px-4 text-center text-[10px] text-paper sm:text-[11px]"
+    >
+      Premier League 2026/27<span class="max-sm:hidden"
+        >&nbsp;· Local, visitante y alternativa</span
+      >
+    </div>
+    <nav class="sticky top-0 z-50 border-b border-ink bg-paper/95 backdrop-blur-sm">
+      <div
+        class="mx-auto flex h-18 max-w-[1440px] items-center justify-between gap-3 px-4 sm:gap-6 sm:px-8 lg:px-14"
+      >
+        <a
+          routerLink="/catalog"
+          class="shrink-0 text-[13px] font-extrabold tracking-[0.26em] text-ink [font-stretch:125%] sm:text-[17px] sm:tracking-[0.42em]"
+          aria-label="Camisetas360, ir al álbum"
+          >CAMISETAS<span class="text-pitch">360</span></a
+        >
 
-          <!-- Desktop Navigation -->
-          <div class="hidden items-center gap-1 md:flex">
-            <a routerLink="/catalog"
-               routerLinkActive="bg-white/10 text-white"
-               [routerLinkActiveOptions]="{ exact: false }"
-               class="rounded-lg px-4 py-2 text-sm font-medium text-slate-300 transition-all duration-200 hover:bg-white/10 hover:text-white">
-              Catálogo
-            </a>
-
-            @if (authService.isLoggedIn()) {
-              <a routerLink="/carrito"
-                 routerLinkActive="bg-white/10 text-white"
-                 class="relative rounded-lg px-4 py-2 text-sm font-medium text-slate-300 transition-all duration-200 hover:bg-white/10 hover:text-white">
-                Carrito
-                @if (cartService.itemCount() > 0) {
-                  <span class="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-[10px] font-bold text-white shadow-lg shadow-blue-500/50 animate-cart-badge">
-                    {{ cartService.itemCount() }}
-                  </span>
-                }
-              </a>
-
-              <a routerLink="/perfil"
-                 routerLinkActive="bg-white/10 text-white"
-                 class="rounded-lg px-4 py-2 text-sm font-medium text-slate-300 transition-all duration-200 hover:bg-white/10 hover:text-white">
-                Mi Perfil
-              </a>
-
-              @if (authService.isAdmin()) {
-                <a routerLink="/pago/alertas"
-                   routerLinkActive="bg-white/10 text-white"
-                   class="rounded-lg px-4 py-2 text-sm font-medium text-red-400 transition-all duration-200 hover:bg-white/10 hover:text-red-300">
-                  Alertas Antifraude
-                </a>
-              }
+        <div class="hidden items-center gap-8 lg:flex">
+          <a routerLink="/catalog" [routerLinkActive]="activo" [class]="link">Catálogo</a>
+          @if (authService.isLoggedIn() && authService.isCustomer()) {
+            <a routerLink="/pedidos" [routerLinkActive]="activo" [class]="link">Mis pedidos</a>
+          }
+          @if (authService.isLoggedIn()) {
+            @if (authService.canManageCatalog()) {
+              <a routerLink="/admin/productos" [routerLinkActive]="activo" [class]="link"
+                >Productos</a
+              >
             }
-          </div>
+            @if (authService.canSeeMetrics()) {
+              <a routerLink="/admin/metricas" [routerLinkActive]="activo" [class]="link"
+                >Métricas</a
+              >
+            }
+            @if (authService.isAdmin()) {
+              <a routerLink="/pago/alertas" [routerLinkActive]="activo" [class]="link"
+                >Alertas Antifraude</a
+              >
+            }
+            <a routerLink="/perfil" [routerLinkActive]="activo" [class]="link">Mi Perfil</a>
+          }
+        </div>
 
-          <!-- Right Section -->
-          <div class="flex items-center gap-3">
-            <!-- Notification Bell Button -->
-            <button
-              (click)="toggleNotificationCenter()"
-              class="relative rounded-lg p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
-              title="Centro de Notificaciones"
-              aria-label="Abrir centro de notificaciones"
+        <div class="flex shrink-0 items-center gap-0.5 sm:gap-3">
+          <button
+            type="button"
+            (click)="toggleNotificationCenter()"
+            class="relative p-2 text-ink transition-colors hover:text-pitch"
+            title="Centro de notificaciones"
+            aria-label="Abrir centro de notificaciones"
+          >
+            <svg
+              class="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="1.6"
+              aria-hidden="true"
             >
-              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-              @if (authService.isLoggedIn()) {
-                <span class="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-slate-900"></span>
-              }
-            </button>
-
+              <path
+                stroke-linecap="square"
+                d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 0 0-4-5.7V5a2 2 0 1 0-4 0v.3A6 6 0 0 0 6 11v3.2c0 .5-.2 1-.6 1.4L4 17h5m6 0v1a3 3 0 1 1-6 0v-1m6 0H9"
+              />
+            </svg>
             @if (authService.isLoggedIn()) {
-              <!-- User Info -->
-              <div class="hidden items-center gap-3 md:flex">
-                <div class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
-                  {{ authService.userInitials() }}
-                </div>
-                <span class="text-sm font-medium text-slate-300">{{ authService.activeUser() }}</span>
-              </div>
-
-              <button
-                (click)="authService.logout()"
-                class="rounded-lg border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 transition-all duration-200 hover:border-red-500 hover:bg-red-500/10 hover:text-red-300">
-                Salir
-              </button>
-            } @else {
-              <a routerLink="/auth/login"
-                class="rounded-lg bg-white px-5 py-2 text-sm font-bold text-slate-900 shadow-sm transition-all duration-200 hover:bg-blue-50 hover:shadow-md active:scale-[0.97]">
-                Iniciar Sesión
-              </a>
+              <span
+                class="absolute right-1.5 top-1.5 h-1.5 w-1.5 bg-pitch"
+                aria-hidden="true"
+              ></span>
             }
+          </button>
 
-            <!-- Mobile Menu Toggle -->
+          @if (authService.isLoggedIn() && authService.isCustomer()) {
+            <a
+              routerLink="/carrito"
+              [routerLinkActive]="activo"
+              class="album-caps flex items-center gap-2 px-2 py-2 text-[11px] text-ink underline-offset-[7px] hover:underline"
+            >
+              <svg
+                class="h-5 w-5 sm:hidden"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="1.6"
+                aria-hidden="true"
+              >
+                <path stroke-linecap="square" d="M5 8h14l-1 12H6L5 8Zm4 0V6a3 3 0 0 1 6 0v2" />
+              </svg>
+              <span class="max-sm:sr-only">Carrito</span>
+              <span
+                class="tnum inline-flex min-w-6 justify-center border border-ink px-1 text-[11px] tracking-normal"
+                >{{ cartService.itemCount() }}</span
+              >
+            </a>
+          }
+
+          @if (authService.isLoggedIn()) {
+            <span
+              class="hidden h-8 w-8 items-center justify-center border border-ink text-[11px] font-bold tracking-wider md:flex"
+              [title]="authService.activeUser()"
+              aria-hidden="true"
+              >{{ authService.userInitials() }}</span
+            >
             <button
-              (click)="toggleMobileMenu()"
-              class="rounded-lg p-2 text-slate-400 transition hover:bg-white/10 hover:text-white md:hidden">
-              @if (mobileMenuOpen()) {
-                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              } @else {
-                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              }
+              type="button"
+              (click)="authService.logout()"
+              class="album-caps hidden px-2 py-2 text-[11px] text-slate-600 hover:text-ink sm:block"
+            >
+              Salir
             </button>
-          </div>
+          } @else {
+            <a
+              routerLink="/auth/login"
+              class="album-caps whitespace-nowrap bg-ink px-3 py-2.5 text-[10px] tracking-[0.14em] text-paper transition-colors hover:bg-pitch sm:px-4 sm:text-[11px] sm:tracking-[0.2em]"
+            >
+              Iniciar Sesión
+            </a>
+          }
+
+          <!-- Sin sesión el menú solo tendría «Catálogo», que ya es el logotipo. -->
+          @if (authService.isLoggedIn()) {
+            <button
+              type="button"
+              (click)="toggleMobileMenu()"
+              class="p-2 text-ink lg:hidden"
+              [attr.aria-expanded]="mobileMenuOpen()"
+              aria-label="Abrir menú"
+            >
+              <svg
+                class="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="1.6"
+                aria-hidden="true"
+              >
+                @if (mobileMenuOpen()) {
+                  <path stroke-linecap="square" d="M6 18 18 6M6 6l12 12" />
+                } @else {
+                  <path stroke-linecap="square" d="M4 7h16M4 12h16M4 17h16" />
+                }
+              </svg>
+            </button>
+          }
         </div>
       </div>
 
-      <!-- Mobile Menu -->
       @if (mobileMenuOpen()) {
-        <div class="border-t border-white/10 bg-slate-900/98 backdrop-blur-xl md:hidden animate-slide-down">
-          <div class="space-y-1 px-4 py-4">
-            <a routerLink="/catalog"
-               routerLinkActive="bg-white/10 text-white"
-               (click)="closeMobileMenu()"
-               class="block rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white">
-              Catálogo
-            </a>
-
+        <div class="animate-slide-down border-t border-ink bg-paper lg:hidden">
+          <div class="mx-auto flex max-w-[1440px] flex-col px-4 py-2 sm:px-8">
+            <a routerLink="/catalog" (click)="closeMobileMenu()" [class]="mobileLink">Catálogo</a>
+            @if (authService.isLoggedIn() && authService.isCustomer()) {
+              <a routerLink="/carrito" (click)="closeMobileMenu()" [class]="mobileLink"
+                >Carrito
+                <span class="tnum ml-2 border border-ink px-1.5 text-[11px] tracking-normal">{{
+                  cartService.itemCount()
+                }}</span></a
+              >
+              <a routerLink="/pedidos" (click)="closeMobileMenu()" [class]="mobileLink"
+                >Mis pedidos</a
+              >
+            }
             @if (authService.isLoggedIn()) {
-              <a routerLink="/carrito"
-                 routerLinkActive="bg-white/10 text-white"
-                 (click)="closeMobileMenu()"
-                 class="flex items-center justify-between rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white">
-                <span>Carrito</span>
-                @if (cartService.itemCount() > 0) {
-                  <span class="rounded-full bg-blue-500 px-2.5 py-0.5 text-xs font-bold text-white">
-                    {{ cartService.itemCount() }}
-                  </span>
-                }
-              </a>
-
-              <a routerLink="/perfil"
-                 routerLinkActive="bg-white/10 text-white"
-                 (click)="closeMobileMenu()"
-                 class="block rounded-lg px-4 py-3 text-sm font-medium text-slate-300 transition hover:bg-white/10 hover:text-white">
-                Mi Perfil
-              </a>
-
-              @if (authService.isAdmin()) {
-                <a routerLink="/pago/alertas"
-                   routerLinkActive="bg-white/10 text-white"
-                   (click)="closeMobileMenu()"
-                   class="block rounded-lg px-4 py-3 text-sm font-medium text-red-400 transition hover:bg-white/10 hover:text-red-300">
-                  Alertas Antifraude
-                </a>
+              @if (authService.canManageCatalog()) {
+                <a routerLink="/admin/productos" (click)="closeMobileMenu()" [class]="mobileLink"
+                  >Productos</a
+                >
               }
-
-              <!-- User Info (Mobile) -->
-              <div class="mt-2 border-t border-white/10 pt-3">
-                <div class="flex items-center gap-3 px-4 py-2">
-                  <div class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
-                    {{ authService.userInitials() }}
-                  </div>
-                  <span class="text-sm font-medium text-slate-300">{{ authService.activeUser() }}</span>
-                </div>
-              </div>
+              @if (authService.canSeeMetrics()) {
+                <a routerLink="/admin/metricas" (click)="closeMobileMenu()" [class]="mobileLink"
+                  >Métricas</a
+                >
+              }
+              @if (authService.isAdmin()) {
+                <a routerLink="/pago/alertas" (click)="closeMobileMenu()" [class]="mobileLink"
+                  >Alertas Antifraude</a
+                >
+              }
+              <a routerLink="/perfil" (click)="closeMobileMenu()" [class]="mobileLink">Mi Perfil</a>
+              <p class="flex items-center justify-between py-4 text-sm text-slate-600">
+                <span>{{ authService.activeUser() }}</span>
+                <button
+                  type="button"
+                  (click)="authService.logout()"
+                  class="album-caps text-[11px] text-ink underline underline-offset-4"
+                >
+                  Salir
+                </button>
+              </p>
             }
           </div>
         </div>
       }
 
-      <!-- Notification Center Panel -->
       @if (showNotificationCenter()) {
         <app-notification-center (close)="closeNotificationCenter()" />
       }
@@ -190,16 +219,18 @@ import { NotificationCenterComponent } from '../../../features/notifications/not
   `,
 })
 export class NavbarComponent {
-  /** Estado del menú móvil */
-  readonly mobileMenuOpen = signal<boolean>(false);
+  readonly link = LINK;
+  readonly activo = LINK_ACTIVO;
+  readonly mobileLink =
+    'album-caps flex items-center border-b border-rule py-4 text-[12px] text-ink last:border-b-0';
 
-  /** Estado del panel de notificaciones */
+  readonly mobileMenuOpen = signal<boolean>(false);
   readonly showNotificationCenter = signal<boolean>(false);
 
   constructor(
     readonly authService: AuthService,
-    readonly cartService: CartService
-  ) { }
+    readonly cartService: CartService,
+  ) {}
 
   toggleMobileMenu(): void {
     this.mobileMenuOpen.set(!this.mobileMenuOpen());

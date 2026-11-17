@@ -35,11 +35,6 @@ describe('NotificationCenterComponent', () => {
     });
   });
 
-  it('debe crearse correctamente', () => {
-    const fixture = TestBed.createComponent(NotificationCenterComponent);
-    expect(fixture.componentInstance).toBeTruthy();
-  });
-
   it('debe mostrar la información del canal de notificaciones y el correo del usuario', () => {
     const fixture = TestBed.createComponent(NotificationCenterComponent);
     fixture.detectChanges();
@@ -76,4 +71,3 @@ describe('NotificationCenterComponent', () => {
     expect(text).toContain('ADMIN');
   });
 });
-

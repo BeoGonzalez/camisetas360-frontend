@@ -4,9 +4,11 @@ import { routes } from './app.routes';
 
 import {
   provideHttpClient,
+  withInterceptors,
   withInterceptorsFromDi,
   HTTP_INTERCEPTORS,
 } from '@angular/common/http';
+import { unauthorizedInterceptor } from './core/http/unauthorized.interceptor';
 
 import { environment } from '../environments/environment';
 
@@ -66,40 +68,20 @@ export function MSALGuardConfigFactory(): MsalGuardConfiguration {
  * Authorization: Bearer <token>
  */
 import { AuthInterceptor } from './core/interceptors/auth.interceptor';
+import { MsalUnlessAuthorizedInterceptor } from './core/interceptors/msal-unless-authorized.interceptor';
+import { SCOPE_POR_ENDPOINT, apiScope } from './core/auth/api-scopes';
 
-export function MSALInterceptorConfigFactory():
-  MsalInterceptorConfiguration {
+export function MSALInterceptorConfigFactory(): MsalInterceptorConfiguration {
+  const protectedResourceMap = new Map<string, Array<string> | null>();
 
-  const protectedResourceMap =
-    new Map<string, Array<string> | null>();
-
-  const apiScope =
-    'api://719c999d-0f57-4ad5-9bd9-a72be5ca07e0';
-
-  protectedResourceMap.set(
-    `${environment.apiGateway}${environment.endpoints.auth}/*`,
-    [`${apiScope}/Profile.Read`]
-  );
-  protectedResourceMap.set(
-    `${environment.apiGateway}${environment.endpoints.catalog}/*`,
-    [`${apiScope}/Catalog.Read`]
-  );
-  protectedResourceMap.set(
-    `${environment.apiGateway}${environment.endpoints.cart}/*`,
-    [`${apiScope}/Checkout.Create`]
-  );
-  protectedResourceMap.set(
-    `${environment.apiGateway}${environment.endpoints.orders}/*`,
-    [`${apiScope}/Orders.Read`]
-  );
-  protectedResourceMap.set(
-    `${environment.apiGateway}${environment.endpoints.notifications}/*`,
-    [`${apiScope}/Notifications.Send`]
-  );
-  protectedResourceMap.set(
-    `${environment.apiGateway}${environment.endpoints.pago}/*`,
-    [`${apiScope}/Checkout.Create`]
-  );
+  // MsalInterceptor pide el token de cada prefijo con acquireTokenSilent y, ante
+  // InteractionRequiredAuthError, cae a acquireTokenRedirect (interactionType: Redirect).
+  // Se registra el prefijo exacto (GET /carrito, GET /orders) y el comodín para subrutas.
+  for (const [key, scope] of SCOPE_POR_ENDPOINT) {
+    const base = `${environment.apiGateway}${environment.endpoints[key]}`;
+    protectedResourceMap.set(base, [apiScope(scope)]);
+    protectedResourceMap.set(`${base}/*`, [apiScope(scope)]);
+  }
 
   return {
     interactionType: InteractionType.Redirect,
@@ -110,20 +92,14 @@ export function MSALInterceptorConfigFactory():
 /**
  * Inicializa MSAL antes de que arranque la aplicación.
  */
-export function MSALInitializerFactory(
-  msalService: MsalService
-) {
+export function MSALInitializerFactory(msalService: MsalService) {
   return async () => {
-
     await msalService.instance.initialize();
 
-    const response =
-      await msalService.instance.handleRedirectPromise();
+    const response = await msalService.instance.handleRedirectPromise();
 
     if (response?.account) {
-      msalService.instance.setActiveAccount(
-        response.account
-      );
+      msalService.instance.setActiveAccount(response.account);
       return;
     }
 
@@ -131,18 +107,13 @@ export function MSALInitializerFactory(
      * Si recargamos la página y ya existe una cuenta
      * almacenada, la dejamos como activa.
      */
-    const activeAccount =
-      msalService.instance.getActiveAccount();
+    const activeAccount = msalService.instance.getActiveAccount();
 
     if (!activeAccount) {
-
-      const accounts =
-        msalService.instance.getAllAccounts();
+      const accounts = msalService.instance.getAllAccounts();
 
       if (accounts.length > 0) {
-        msalService.instance.setActiveAccount(
-          accounts[0]
-        );
+        msalService.instance.setActiveAccount(accounts[0]);
       }
     }
   };
@@ -152,9 +123,7 @@ export function MSALInitializerFactory(
  * Configuración principal de Angular.
  */
 export const appConfig: ApplicationConfig = {
-
   providers: [
-
     provideRouter(routes),
 
     /*
@@ -165,9 +134,7 @@ export const appConfig: ApplicationConfig = {
      * MSALInterceptor es el único encargado
      * de añadir el Bearer Token.
      */
-    provideHttpClient(
-      withInterceptorsFromDi()
-    ),
+    provideHttpClient(withInterceptors([unauthorizedInterceptor]), withInterceptorsFromDi()),
 
     /*
      * Camisetas360 Auth interceptor (Cognito / API Gateway).
@@ -179,11 +146,12 @@ export const appConfig: ApplicationConfig = {
     },
 
     /*
-     * MSAL HTTP interceptor.
+     * MSAL HTTP interceptor (se omite si la petición ya trae el Bearer de Cognito).
      */
+    MsalInterceptor,
     {
       provide: HTTP_INTERCEPTORS,
-      useClass: MsalInterceptor,
+      useClass: MsalUnlessAuthorizedInterceptor,
       multi: true,
     },
 

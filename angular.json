@@ -30,7 +30,12 @@
           },
           "configurations": {
             "production": {
-              "fileReplacements": [{ "replace": "src/environments/environment.ts", "with": "src/environments/environment.prod.ts" }],
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.prod.ts"
+                }
+              ],
               "budgets": [
                 {
                   "type": "initial",
@@ -49,6 +54,17 @@
               "optimization": false,
               "extractLicenses": false,
               "sourceMap": true
+            },
+            "local": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.local.ts"
+                }
+              ]
             }
           },
           "defaultConfiguration": "production"
@@ -61,12 +77,34 @@
             },
             "development": {
               "buildTarget": "camisetas360-frontend:build:development"
+            },
+            "local": {
+              "buildTarget": "camisetas360-frontend:build:local",
+              "proxyConfig": "proxy.conf.json"
             }
           },
           "defaultConfiguration": "development"
         },
         "test": {
-          "builder": "@angular/build:unit-test"
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "coverageReporters": [
+              "text-summary",
+              "html",
+              "lcovonly"
+            ],
+            "coverageExclude": [
+              "src/environments/**",
+              "src/main.ts",
+              "**/*.routes.ts"
+            ],
+            "coverageThresholds": {
+              "statements": 60,
+              "branches": 57,
+              "functions": 57,
+              "lines": 62
+            }
+          }
         }
       }
     }

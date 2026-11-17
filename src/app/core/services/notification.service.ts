@@ -39,20 +39,18 @@ export class NotificationService {
     this.sending.set(true);
     this.lastError.set(null);
 
-    return this.http
-      .post<SendEmailResponse>(`${this.apiUrl}/email`, request)
-      .pipe(
-        tap((response) => {
-          this.sending.set(false);
-          this.lastSuccess.set(response);
-        }),
-        catchError((err: HttpErrorResponse) => {
-          this.sending.set(false);
-          const parsedMessage = this.handleHttpError(err);
-          this.lastError.set(parsedMessage);
-          return throwError(() => new Error(parsedMessage));
-        })
-      );
+    return this.http.post<SendEmailResponse>(`${this.apiUrl}/email`, request).pipe(
+      tap((response) => {
+        this.sending.set(false);
+        this.lastSuccess.set(response);
+      }),
+      catchError((err: HttpErrorResponse) => {
+        this.sending.set(false);
+        const parsedMessage = this.handleHttpError(err);
+        this.lastError.set(parsedMessage);
+        return throwError(() => new Error(parsedMessage));
+      }),
+    );
   }
 
   /**
@@ -92,4 +90,3 @@ export class NotificationService {
     );
   }
 }
-

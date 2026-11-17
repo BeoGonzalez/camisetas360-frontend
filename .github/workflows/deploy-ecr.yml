@@ -1,7 +1,15 @@
 name: Construir y Desplegar en ECS
 
+# PR a main: solo calidad (tests + build). Push a main / manual: calidad y luego deploy.
 on:
   push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+  pull_request:
     branches:
       - main
 
@@ -18,18 +26,113 @@ env:
   # Nombres creados por Terraform (ecs.tf)
   TASK_FAMILY: frontend-task
   CONTAINER_NAME: frontend
+  # Configuración del SPA (Settings > Secrets and variables > Actions > Variables).
+  # Son IDs públicos y URLs que terminan en el bundle: van como variables, no como secrets.
+  NG_APP_ENTRA_CLIENT_ID: ${{ vars.NG_APP_ENTRA_CLIENT_ID }}
+  NG_APP_ENTRA_TENANT_ID: ${{ vars.NG_APP_ENTRA_TENANT_ID }}
+  NG_APP_API_SCOPE_BASE: ${{ vars.NG_APP_API_SCOPE_BASE }}
+  NG_APP_API_BASE_URL: ${{ vars.NG_APP_API_BASE_URL }}
+  NG_APP_TELEMETRIA_WS_URL: ${{ vars.NG_APP_TELEMETRIA_WS_URL }}
 
 concurrency:
-  group: deploy-frontend-ecs
-  cancel-in-progress: false
+  # Un deploy a la vez; en PRs se cancela la corrida anterior de la misma rama.
+  group: ${{ github.event_name == 'pull_request' && format('ci-{0}', github.ref) || 'deploy-frontend-ecs' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
     shell: bash
 
 jobs:
+  # ========================================
+  # CALIDAD: tests unitarios + build de producción
+  # ========================================
+  test:
+    name: Tests y build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Instalar pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      # Falla si la cobertura baja de los umbrales de angular.json (trinquete).
+      - name: Tests unitarios (Vitest) con cobertura
+        run: pnpm test:coverage
+
+      - name: Publicar reporte de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura
+          path: coverage/
+          retention-days: 7
+
+      - name: Build de producción
+        run: pnpm run build
+
+  # ========================================
+  # E2E HERMÉTICOS + RENDIMIENTO (Playwright)
+  # La API se simula con page.route: no requiere backend. Los tests @backend (ms-pagos real)
+  # no corren aquí. El proyecto "rendimiento" mide el build de producción (CWV + budget de JS).
+  # ========================================
+  e2e:
+    name: E2E y rendimiento
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Instalar pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+
+      - name: Instalar Chromium de Playwright
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E herméticos
+        run: pnpm e2e
+
+      # En serie y en su propio paso: las mediciones no compiten por CPU con otros tests.
+      - name: Rendimiento del build de producción
+        run: pnpm e2e:rendimiento
+
+      - name: Publicar reporte de Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
   build-and-deploy:
     name: Build, Push and Deploy to ECS
+    needs: [test, e2e]
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -91,11 +194,25 @@ jobs:
           echo "SHA:    $IMAGE_SHA"
 
           docker build \
+            --build-arg NG_APP_ENTRA_CLIENT_ID \
+            --build-arg NG_APP_ENTRA_TENANT_ID \
+            --build-arg NG_APP_API_SCOPE_BASE \
+            --build-arg NG_APP_API_BASE_URL \
+            --build-arg NG_APP_TELEMETRIA_WS_URL \
             -t "$IMAGE_LATEST" \
             -t "$IMAGE_SHA" \
             .
 
           echo "Build completado"
+
+      # ========================================
+      # SMOKE TEST DE LA IMAGEN (antes de publicar)
+      # nginx arranca sin app-pagos, /health, fallback SPA, gzip y caché.
+      # ========================================
+      - name: Smoke test de salud de la imagen
+        env:
+          IMAGE: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+        run: bash scripts/smoke-image.sh "$IMAGE"
 
       # ========================================
       # PUSH ECR

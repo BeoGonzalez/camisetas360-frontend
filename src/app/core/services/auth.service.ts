@@ -1,9 +1,10 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { MsalService } from '@azure/msal-angular';
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Observable, of, catchError, throwError } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { Observable, of, catchError, throwError, tap, shareReplay } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { UserProfile } from '../models/auth.model';
+import { AppRole, UserProfile } from '../models/auth.model';
+import { toApiError } from '../http/api-error';
 import { CognitoAuthService } from './cognito-auth.service';
 
 /**
@@ -48,23 +49,35 @@ export class AuthService {
       .join('');
   });
 
-  /** Signal reactivo: roles del usuario extraídos del token */
+  /** Roles del usuario: claim `roles` de Entra (id token) o roles de la sesión Cognito. */
   readonly userRoles = computed<string[]>(() => {
     if (this.cognitoAuth.isLoggedIn()) {
       return this.cognitoAuth.userRoles();
     }
+    this._isLoggedIn(); // re-evalúa al cambiar la cuenta activa
     const activeAccount = this.msalService.instance.getActiveAccount();
-    const claims = activeAccount?.idTokenClaims as Record<string, any> | undefined;
-    if (claims && Array.isArray(claims['roles'])) {
-      return claims['roles'] as string[];
-    }
-    return [];
+    const claims = activeAccount?.idTokenClaims as Record<string, unknown> | undefined;
+    const roles = claims?.['roles'];
+    return Array.isArray(roles) ? (roles as string[]) : [];
   });
 
   /** Signal reactivo: indica si el usuario posee el rol ADMIN */
-  readonly isAdmin = computed<boolean>(() => {
-    return this.userRoles().includes('ADMIN');
-  });
+  readonly isAdmin = computed<boolean>(() => this.userRoles().includes('ADMIN'));
+
+  readonly isCustomer = computed<boolean>(() => this.userRoles().includes('CUSTOMER'));
+
+  /** ADMIN o CATALOG_MANAGER: dashboard de métricas. */
+  readonly canSeeMetrics = computed<boolean>(() => this.hasAnyRole(['ADMIN', 'CATALOG_MANAGER']));
+
+  /** ADMIN o CATALOG_MANAGER: gestión de camisetas (/admin/productos). */
+  readonly canManageCatalog = computed<boolean>(() =>
+    this.hasAnyRole(['ADMIN', 'CATALOG_MANAGER']),
+  );
+
+  hasAnyRole(roles: readonly AppRole[]): boolean {
+    const mine = this.userRoles();
+    return roles.some((r) => mine.includes(r));
+  }
 
   /** Signal reactivo: correo electrónico del usuario autenticado */
   readonly userEmail = computed<string>(() => {
@@ -101,9 +114,15 @@ export class AuthService {
     }
   }
 
-  /** Inicia el flujo de login con redirección a Azure Entra ID */
-  login(): void {
-    this.msalService.loginRedirect().subscribe();
+  /**
+   * Inicia el flujo de login con redirección a Azure Entra ID. Tras volver de Microsoft, MSAL
+   * lleva al usuario a `returnUrl` (ruta interna ya validada por quien llama).
+   */
+  login(returnUrl?: string): void {
+    const request = returnUrl
+      ? { scopes: [], redirectStartPage: new URL(returnUrl, window.location.origin).href }
+      : undefined;
+    this.msalService.loginRedirect(request).subscribe();
   }
 
   /** Inicia el flujo de login redirigiendo a la Interfaz Alojada de AWS Cognito */
@@ -119,6 +138,8 @@ export class AuthService {
 
   /** Cierra la sesión activa */
   logout(): void {
+    this.profile.set(null);
+    this.profile$ = null;
     if (this.cognitoAuth.isLoggedIn()) {
       this.cognitoAuth.logout();
     }
@@ -164,31 +185,42 @@ export class AuthService {
   // ENDPOINTS HTTP DE AUTENTICACIÓN
   // ==========================================
 
+  /** Perfil sincronizado con el backend (GET /auth/profile), o null si aún no se obtiene. */
+  readonly profile = signal<UserProfile | null>(null);
+  private profile$: Observable<UserProfile> | null = null;
+
   /**
-   * Obtiene el perfil del usuario desde el backend o del usuario Cognito.
+   * GET /api/v1/auth/profile. Sincroniza el perfil en el backend; se llama UNA vez por
+   * sesión (resultado cacheado). Con Cognito no hay perfil Entra: se arma con los datos locales.
    */
-  getProfile(): Observable<any> {
+  getProfile(): Observable<UserProfile> {
     if (this.cognitoAuth.isLoggedIn()) {
       const u = this.cognitoAuth.currentUser();
       return of({
-        id: u?.sub || 'cognito-user',
-        nombre: u?.name || 'Usuario Cognito',
-        correo: u?.email || '',
-        identificador: u?.username || u?.email || '',
+        userId: u?.sub || '',
+        tenantId: '',
+        email: u?.email || '',
+        name: u?.name || '',
       });
     }
-    return this.http.get<UserProfile>(`${this.apiUrl}/profile`)
-      .pipe(catchError(this.handleError));
+    if (!this.profile$) {
+      this.profile$ = this.http.get<UserProfile>(`${this.apiUrl}/profile`).pipe(
+        tap((p) => this.profile.set(p)),
+        catchError((err) => {
+          this.profile$ = null; // permitir reintento manual
+          return throwError(() => toApiError(err));
+        }),
+        shareReplay(1),
+      );
+    }
+    return this.profile$;
   }
 
-  verifySession(): Observable<void> {
-    return this.http.post<void>(`${this.apiUrl}/verify-session`, {})
-      .pipe(catchError(this.handleError));
-  }
-
-  getPublicStatus(): Observable<any> {
-    return this.http.get<any>(`${this.apiUrl}/public/status`)
-      .pipe(catchError(this.handleError));
+  /** Sincroniza el perfil tras el login sin bloquear la UI (errores se muestran en /perfil). */
+  syncProfileOnce(): void {
+    if (this._isLoggedIn() && !this.cognitoAuth.isLoggedIn()) {
+      this.getProfile().subscribe({ error: () => undefined });
+    }
   }
 
   /** Adquiere un token de acceso asíncrono para MSAL o Cognito */
@@ -210,13 +242,7 @@ export class AuthService {
       });
       return response.accessToken;
     } catch {
-      console.warn('[AuthService] No se pudo adquirir token silencioso de MSAL');
       return null;
     }
-  }
-
-  private handleError(error: HttpErrorResponse) {
-    console.error('AuthService Error:', error.message);
-    return throwError(() => new Error('Ocurrió un error en la autenticación. Inténtalo de nuevo más tarde.'));
   }
 }

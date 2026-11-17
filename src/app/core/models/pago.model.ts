@@ -69,7 +69,8 @@ export interface AlertaFraude {
   id: string;
   ordenId: string;
   pagoId: string;
-  tarjetaHash: string;
+  /** No se muestra nunca en la UI (brecha #3): solo tarjetaUltimos4. */
+  tarjetaHash?: string;
   tarjetaUltimos4: string;
   intentosDetectados: number;
   ventanaSegundos: number;
@@ -88,6 +89,8 @@ export interface PagoError {
   esNoDisponible?: boolean;
   intentosDetectados?: number;
   ventanaSegundos?: number;
+  /** 429: segundos que faltan para poder volver a pagar (body o header Retry-After). */
+  segundosParaReintentar?: number;
   detallesPorCampo?: Record<string, string>;
   pagoId?: string;
   ordenId?: string;
