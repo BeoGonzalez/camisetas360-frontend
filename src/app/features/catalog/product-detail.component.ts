@@ -1,4 +1,5 @@
-import { Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { ViewportScroller } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { map, switchMap, tap } from 'rxjs';
@@ -7,7 +8,8 @@ import { CartService } from '../../core/services/cart.service';
 import { AuthService } from '../../core/services/auth.service';
 import { KIT_TYPE_LABEL, Product } from '../../core/models/product.model';
 import { ClpPipe } from '../../shared/pipes/clp.pipe';
-import { slug } from './catalog.component';
+import { slug } from '../../shared/utils/slug';
+import { estiloEquipo } from '../../shared/utils/team-colors';
 import { ApiError } from '../../core/http/api-error';
 import { CANTIDAD_MAXIMA_POR_SKU } from '../../core/models/cart.model';
 import { ApiErrorComponent } from '../../shared/components/api-error/api-error.component';
@@ -52,24 +54,33 @@ import { ProductImageComponent } from '../../shared/components/product-image/pro
         <app-api-error [error]="error()" title="No se pudo cargar el producto" (retry)="reload()" />
       </div>
     } @else if (product(); as p) {
+      <!-- La ficha se imprime con el color del club (regla superior, casillero, botón). -->
       <article
-        class="grid gap-10 border-t border-ink pt-8 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-16"
+        class="grid gap-10 border-t-[6px] border-[var(--eq)] pt-8 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-16"
+        [style]="estilo()"
       >
-        <div class="album-slot relative aspect-[4/5] md:sticky md:top-28 md:self-start">
+        <div
+          class="album-slot relative aspect-[4/5] bg-[color-mix(in_oklab,var(--eq)_7%,var(--color-paper))] md:sticky md:top-28 md:self-start"
+        >
           <span
-            class="tnum absolute left-4 top-3 z-10 text-[14px] font-bold tracking-[0.16em] text-pitch"
+            class="tnum absolute left-4 top-3 z-10 text-[14px] font-bold tracking-[0.16em] eq-num"
             >{{ p.sku }}</span
           >
           <app-product-image
             class="h-full p-10"
             [sku]="p.sku"
             [version]="p.imageVersion"
+            [team]="p.team"
+            [kitType]="p.kitType"
             [alt]="p.name"
           />
         </div>
 
-        <div class="min-w-0">
-          <h1 class="album-display text-[clamp(32px,3.6vw,52px)]">{{ p.name }}</h1>
+        <div class="@container min-w-0">
+          <!-- Tamaño según el ancho de la columna: "Wolverhampton" (13 letras) cabe entero. -->
+          <h1 class="album-display text-[length:clamp(24px,calc(100cqi/14.5),52px)]">
+            {{ p.name }}
+          </h1>
 
           <p class="tnum mt-6 text-[40px] font-extrabold leading-none [font-stretch:110%]">
             {{ p.price | clp }}
@@ -80,7 +91,7 @@ import { ProductImageComponent } from '../../shared/components/product-image/pro
             <button
               type="button"
               (click)="comprarSinSesion(p)"
-              class="album-caps mt-8 w-full bg-ink py-4 text-[12px] text-paper transition-colors hover:bg-pitch sm:w-auto sm:px-14"
+              class="album-caps mt-8 w-full bg-[var(--eq)] py-4 text-[12px] text-[var(--eq-sobre)] transition-colors hover:bg-ink hover:text-paper sm:w-auto sm:px-14"
             >
               Comprar
             </button>
@@ -107,7 +118,7 @@ import { ProductImageComponent } from '../../shared/components/product-image/pro
               <button
                 type="submit"
                 [disabled]="adding() || qty() < 1 || qty() > maxQty(p)"
-                class="album-caps flex-1 bg-ink px-8 py-4 text-[12px] text-paper transition-colors hover:bg-pitch disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 sm:flex-none"
+                class="album-caps flex-1 bg-[var(--eq)] px-8 py-4 text-[12px] text-[var(--eq-sobre)] transition-colors hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600 sm:flex-none"
               >
                 {{ adding() ? 'Añadiendo…' : 'Añadir al carrito' }}
               </button>
@@ -154,7 +165,7 @@ import { ProductImageComponent } from '../../shared/components/product-image/pro
         </div>
       </article>
 
-      @if (auth.isCustomer()) {
+      @if (auth.canSeeRecommendations()) {
         <app-recommendations title="Te puede interesar" [excludeSku]="p.sku" />
       }
     }
@@ -167,6 +178,7 @@ export class ProductDetailComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly scroller = inject(ViewportScroller);
 
   readonly product = signal<Product | null>(null);
   readonly loading = signal(true);
@@ -179,7 +191,12 @@ export class ProductDetailComponent implements OnInit {
     this.route.paramMap
       .pipe(
         map((p) => p.get('sku') ?? ''),
-        tap(() => this.startLoading()),
+        tap(() => {
+          // Al abrir otra camiseta desde "Te puede interesar" se reutiliza el componente:
+          // sin esto la nueva queda vista desde el fondo de la página.
+          this.scroller.scrollToPosition([0, 0]);
+          this.startLoading();
+        }),
         switchMap((sku) => this.catalog.getProduct(sku)),
         takeUntilDestroyed(this.destroyRef),
       )
@@ -193,6 +210,9 @@ export class ProductDetailComponent implements OnInit {
       .getProduct(sku)
       .subscribe({ next: (p) => this.done(p), error: (e: ApiError) => this.fail(e) });
   }
+
+  /** Colores del club de la camiseta (sin equipo: las tintas del álbum). */
+  readonly estilo = computed(() => estiloEquipo(this.product()?.team));
 
   /** Volver a la página del álbum de este equipo. */
   volverA(): Record<string, string> {

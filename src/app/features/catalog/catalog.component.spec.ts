@@ -54,7 +54,11 @@ describe('CatalogComponent', () => {
         provideRouter([]),
         {
           provide: AuthService,
-          useValue: { isCustomer: () => isCustomer, isLoggedIn: () => loggedIn },
+          useValue: {
+            isCustomer: () => isCustomer,
+            canSeeRecommendations: () => isCustomer,
+            isLoggedIn: () => loggedIn,
+          },
         },
       ],
     });
@@ -93,6 +97,35 @@ describe('CatalogComponent', () => {
     c.category.set('Futbol');
     expect(c.filtered().length).toBe(2);
     expect(c.categories()).toEqual(['Coleccion', 'Futbol']);
+  });
+
+  it('las camisetas de una liga se agrupan en la categoría de su liga (Premier League, Serie A)', () => {
+    const f = render();
+    const deLiga = (sku: string, league: string): Product => ({
+      sku,
+      name: `Camiseta ${sku}`,
+      category: 'Fútbol',
+      league,
+      price: 89990,
+      stock: 10,
+      description: '',
+    });
+    http
+      .expectOne(productsUrl)
+      .flush([
+        ...products,
+        deLiga('PL-ARS-LOC-2627', 'Premier League'),
+        deLiga('PL-CHE-VIS-2627', 'Premier League'),
+        deLiga('SA-INT-LOC-2627', 'Serie A'),
+      ]);
+    const c = f.componentInstance;
+    expect(c.categories()).toEqual(['Coleccion', 'Futbol', 'Premier League', 'Serie A']);
+    c.category.set('Premier League');
+    expect(c.filtered().map((p) => p.sku)).toEqual(['PL-ARS-LOC-2627', 'PL-CHE-VIS-2627']);
+    c.category.set('Serie A');
+    expect(c.filtered().map((p) => p.sku)).toEqual(['SA-INT-LOC-2627']);
+    // "Fútbol" ya no aparece: todas las camisetas con esa categoría tienen liga.
+    expect(c.categories()).not.toContain('Fútbol');
   });
 
   it('estado vacío', () => {

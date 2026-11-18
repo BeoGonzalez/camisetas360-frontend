@@ -6,6 +6,8 @@ import { environment } from '../../../environments/environment';
 import { AppRole, UserProfile } from '../models/auth.model';
 import { toApiError } from '../http/api-error';
 import { CognitoAuthService } from './cognito-auth.service';
+import { CartService } from './cart.service';
+import { Router } from '@angular/router';
 
 /**
  * Servicio de autenticación unificado que encapsula Azure Entra ID (MSAL),
@@ -16,6 +18,8 @@ export class AuthService {
   private readonly msalService = inject(MsalService);
   private readonly http = inject(HttpClient);
   private readonly cognitoAuth = inject(CognitoAuthService);
+  private readonly cart = inject(CartService);
+  private readonly router = inject(Router);
 
   /** Signal reactivo interno para MSAL */
   private readonly _isLoggedIn = signal<boolean>(false);
@@ -65,6 +69,14 @@ export class AuthService {
   readonly isAdmin = computed<boolean>(() => this.userRoles().includes('ADMIN'));
 
   readonly isCustomer = computed<boolean>(() => this.userRoles().includes('CUSTOMER'));
+
+  /**
+   * Recomendaciones personalizadas: el microservicio recommendation identifica al usuario por su
+   * identidad de Entra (tid:oid) y no acepta tokens de Cognito; con sesión Cognito no se muestran.
+   */
+  readonly canSeeRecommendations = computed<boolean>(
+    () => this.isCustomer() && this.authProvider() !== 'cognito',
+  );
 
   /** ADMIN o CATALOG_MANAGER: dashboard de métricas. */
   readonly canSeeMetrics = computed<boolean>(() => this.hasAnyRole(['ADMIN', 'CATALOG_MANAGER']));
@@ -136,17 +148,25 @@ export class AuthService {
     window.location.href = cognitoUrl;
   }
 
-  /** Cierra la sesión activa */
+  /**
+   * Cierra la sesión activa y deja el navegador listo para que otra persona entre: borra el
+   * perfil y el espejo del carrito (el carrito real queda en el backend, asociado a su dueño).
+   * Entra ID vuelve solo vía logoutRedirect; con Cognito se va al login.
+   */
   logout(): void {
     this.profile.set(null);
     this.profile$ = null;
+    this.cart.reset();
+    const conEntra = !!this.msalService.instance.getActiveAccount();
     if (this.cognitoAuth.isLoggedIn()) {
       this.cognitoAuth.logout();
     }
-    if (this.msalService.instance.getActiveAccount()) {
-      this.msalService.logoutRedirect().subscribe();
-    }
     this.clearTokens();
+    if (conEntra) {
+      this.msalService.logoutRedirect().subscribe();
+    } else {
+      this.router.navigate(['/auth/login']);
+    }
   }
 
   // ==========================================

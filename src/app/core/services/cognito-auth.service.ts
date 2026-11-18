@@ -113,6 +113,21 @@ export class CognitoAuthService {
   }
 
   /**
+   * ¿El access token falta, no se puede leer o ya expiró (claim exp)? Solo para decidir si hay que
+   * volver a iniciar sesión; la validez real la decide el backend.
+   */
+  tokenVencido(ahoraMs: number = Date.now()): boolean {
+    const token = this._accessToken();
+    if (!token) return true;
+    try {
+      const exp = claimsDeJwt(token)['exp'];
+      return typeof exp !== 'number' || exp * 1000 <= ahoraMs;
+    } catch {
+      return true;
+    }
+  }
+
+  /**
    * Inicia sesión llamando a la función Lambda de Cognito.
    */
   login(email: string, password: string): Observable<CognitoAuthResponse> {

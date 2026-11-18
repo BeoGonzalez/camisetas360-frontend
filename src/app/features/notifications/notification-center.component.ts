@@ -9,37 +9,28 @@ import { SendEmailRequest } from '../../core/models/notification.model';
   selector: 'app-notification-center',
   standalone: true,
   imports: [CommonModule, FormsModule],
+  host: { '(document:keydown.escape)': 'close.emit()' },
   template: `
     <div
-      class="fixed inset-0 z-50 flex justify-end bg-slate-900/60 backdrop-blur-sm transition-opacity"
+      class="fixed inset-0 z-[70] flex justify-end bg-ink/50 transition-opacity"
       (click)="onBackdropClick($event)"
     >
       <div
-        class="flex h-full w-full max-w-md flex-col bg-white shadow-2xl transition-transform animate-slide-left sm:max-w-lg"
+        class="flex h-full w-full max-w-md flex-col border-l border-ink bg-paper animate-slide-left sm:max-w-lg"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="nc-titulo"
       >
         <!-- Header -->
-        <div class="flex items-center justify-between border-b border-slate-100 p-6">
-          <div class="flex items-center gap-3">
-            <div
-              class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600"
-            >
-              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                />
-              </svg>
-            </div>
-            <div>
-              <h2 class="text-lg font-bold text-slate-800">Centro de Notificaciones</h2>
-              <p class="text-xs text-slate-500">Microservicio Notifications</p>
-            </div>
+        <div class="flex items-start justify-between gap-4 border-b border-ink px-6 py-5">
+          <div class="min-w-0">
+            <p class="album-caps text-[10px] text-slate-600">Microservicio Notifications</p>
+            <h2 id="nc-titulo" class="album-display mt-1 text-[26px]">Centro de Notificaciones</h2>
           </div>
           <button
+            type="button"
             (click)="close.emit()"
-            class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            class="shrink-0 p-2 text-ink transition-colors hover:bg-paper-2"
             aria-label="Cerrar panel"
           >
             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -55,29 +46,38 @@ import { SendEmailRequest } from '../../core/models/notification.model';
 
         <!-- Navigation Tabs if Admin -->
         @if (authService.isAdmin()) {
-          <div class="flex border-b border-slate-100 bg-slate-50 px-6 text-sm font-medium">
+          <div
+            class="flex gap-5 overflow-x-auto whitespace-nowrap border-b border-rule px-6"
+            role="tablist"
+          >
             <button
+              type="button"
+              role="tab"
+              [attr.aria-selected]="activeTab() === 'info'"
               (click)="activeTab.set('info')"
+              class="album-caps -mb-px border-b-2 py-3 text-[10px] transition-colors"
               [class]="
                 activeTab() === 'info'
-                  ? 'border-b-2 border-blue-600 text-blue-600 font-semibold'
-                  : 'text-slate-500 hover:text-slate-800'
+                  ? 'border-pitch text-pitch'
+                  : 'border-transparent text-slate-600 hover:text-ink'
               "
-              class="px-4 py-3 transition"
             >
               Canal de Usuario
             </button>
             <button
+              type="button"
+              role="tab"
+              [attr.aria-selected]="activeTab() === 'admin-send'"
               (click)="activeTab.set('admin-send')"
+              class="album-caps -mb-px flex items-center gap-2 border-b-2 py-3 text-[10px] transition-colors"
               [class]="
                 activeTab() === 'admin-send'
-                  ? 'border-b-2 border-blue-600 text-blue-600 font-semibold'
-                  : 'text-slate-500 hover:text-slate-800'
+                  ? 'border-pitch text-pitch'
+                  : 'border-transparent text-slate-600 hover:text-ink'
               "
-              class="flex items-center gap-1.5 px-4 py-3 transition"
             >
               <span>Despachar Correo</span>
-              <span class="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-bold text-blue-700"
+              <span class="hidden border border-current px-1 py-px text-[9px] sm:inline"
                 >ADMIN</span
               >
             </button>
@@ -88,120 +88,87 @@ import { SendEmailRequest } from '../../core/models/notification.model';
         <div class="flex-1 overflow-y-auto p-6">
           <!-- User Channel Info Tab -->
           @if (activeTab() === 'info') {
-            <div class="space-y-6">
-              <!-- Channel Status Banner -->
-              <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                <div class="flex items-start gap-3">
-                  <div
-                    class="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"
-                  >
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 class="text-sm font-bold text-emerald-900">
-                      Canal de Notificaciones Operativo
-                    </h3>
-                    <p class="mt-1 text-xs text-emerald-700 leading-relaxed">
-                      El sistema despacha notificaciones automáticas mediante eventos
-                      <span class="font-mono font-semibold">order.created</span> en RabbitMQ hacia
-                      el microservicio <span class="font-semibold">notifications</span>.
-                    </p>
-                  </div>
-                </div>
+            <div class="space-y-8">
+              <!-- Estado del canal -->
+              <div class="border-l-2 border-pitch pl-4">
+                <h3 class="flex items-center gap-2 text-sm font-semibold text-pitch">
+                  <span class="h-2 w-2 bg-pitch" aria-hidden="true"></span>
+                  Canal de Notificaciones Operativo
+                </h3>
+                <p class="mt-2 text-sm leading-relaxed text-slate-700">
+                  El sistema despacha notificaciones automáticas mediante eventos
+                  <code class="font-mono text-[13px] text-ink">order.created</code> en RabbitMQ
+                  hacia el microservicio <span class="font-semibold">notifications</span>.
+                </p>
               </div>
 
-              <!-- Recipient Card -->
-              <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                  Destinatario configurado
-                </p>
-                <p class="mt-1.5 font-medium text-slate-800">
+              <!-- Destinatario -->
+              <div class="border-t border-ink pt-4">
+                <p class="album-caps text-[10px] text-slate-600">Destinatario configurado</p>
+                <p class="mt-2 font-semibold [overflow-wrap:anywhere]">
                   {{ authService.userEmail() || 'Sesión no iniciada' }}
                 </p>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="mt-1 text-sm text-slate-600">
                   Las confirmaciones de compra se remitirán a esta casilla vía SMTP.
                 </p>
               </div>
 
-              <!-- Architecture Details -->
-              <div class="space-y-3">
-                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Flujo de Eventos
-                </h4>
-                <div
-                  class="rounded-xl border border-slate-200 p-4 space-y-3 text-xs text-slate-600"
-                >
-                  <div class="flex items-start gap-3">
-                    <span
-                      class="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-600"
-                      >1</span
-                    >
+              <!-- Flujo -->
+              <div class="border-t border-ink pt-4">
+                <h4 class="album-caps text-[10px] text-slate-600">Flujo de eventos</h4>
+                <ol class="mt-3 text-sm text-slate-700">
+                  <li class="flex gap-4 border-b border-rule py-3">
+                    <span class="tnum font-bold text-pitch">01</span>
                     <p>
-                      <strong class="text-slate-800">Checkout en Carrito:</strong> Emite evento de
+                      <strong class="text-ink">Checkout en carrito:</strong> emite el evento de
                       orden creada.
                     </p>
-                  </div>
-                  <div class="flex items-start gap-3">
-                    <span
-                      class="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-600"
-                      >2</span
-                    >
-                    <p>
-                      <strong class="text-slate-800">RabbitMQ Exchange:</strong> Cola
-                      <code class="font-mono text-blue-600">notifications.order-created.q</code>.
+                  </li>
+                  <li class="flex gap-4 border-b border-rule py-3">
+                    <span class="tnum font-bold text-pitch">02</span>
+                    <p class="min-w-0 [overflow-wrap:anywhere]">
+                      <strong class="text-ink">RabbitMQ:</strong> cola
+                      <code class="font-mono text-[13px] text-ink"
+                        >notifications.order-created.q</code
+                      >.
                     </p>
-                  </div>
-                  <div class="flex items-start gap-3">
-                    <span
-                      class="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-[11px] font-bold text-blue-600"
-                      >3</span
-                    >
-                    <p>
-                      <strong class="text-slate-800">Despacho SMTP:</strong> Envío de correo y
-                      persistencia en tabla
-                      <code class="font-mono text-blue-600">email_deliveries</code>.
+                  </li>
+                  <li class="flex gap-4 border-b border-rule py-3">
+                    <span class="tnum font-bold text-pitch">03</span>
+                    <p class="min-w-0">
+                      <strong class="text-ink">Despacho SMTP:</strong> envío del correo y registro
+                      en <code class="font-mono text-[13px] text-ink">email_deliveries</code>.
                     </p>
-                  </div>
-                </div>
+                  </li>
+                </ol>
               </div>
             </div>
           }
 
           <!-- Admin Send Email Tab -->
           @if (activeTab() === 'admin-send' && authService.isAdmin()) {
-            <form (ngSubmit)="sendAdminEmail()" class="space-y-4">
-              <div
-                class="rounded-lg bg-amber-50 p-3 text-xs text-amber-800 border border-amber-200"
-              >
-                Operación restringida: Requiere rol <strong>ADMIN</strong> y scope
+            <form (ngSubmit)="sendAdminEmail()" class="space-y-5">
+              <p class="border-l-2 border-ink pl-4 text-sm text-slate-700">
+                Operación restringida: requiere rol <strong>ADMIN</strong> y scope
                 <strong>Notifications.Send</strong>.
-              </div>
+              </p>
 
               @if (notificationService.lastSuccess()) {
-                <div
-                  class="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800 border border-emerald-200"
-                >
-                  ¡Correo despachado con éxito a
+                <p role="status" class="border border-pitch px-4 py-3 text-sm text-pitch">
+                  Correo despachado a
                   <strong>{{ notificationService.lastSuccess()?.['to'] ?? emailTo }}</strong
-                  >!
-                </div>
+                  >.
+                </p>
               }
 
               @if (notificationService.lastError()) {
-                <div class="rounded-lg bg-red-50 p-3 text-xs text-red-800 border border-red-200">
+                <p role="alert" class="border border-red-700 px-4 py-3 text-sm text-red-800">
                   {{ notificationService.lastError() }}
-                </div>
+                </p>
               }
 
               <div>
-                <label for="nc-emailTo" class="block text-xs font-semibold text-slate-700"
+                <label for="nc-emailTo" class="album-caps block text-[10px] text-slate-700"
                   >Destinatario (Email)</label
                 >
                 <input
@@ -211,12 +178,12 @@ import { SendEmailRequest } from '../../core/models/notification.model';
                   id="nc-emailTo"
                   required
                   placeholder="cliente@ejemplo.com"
-                  class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  class="mt-2 w-full border border-ink bg-transparent px-3 py-2.5 text-base focus:border-pitch focus:outline-none focus:ring-0"
                 />
               </div>
 
               <div>
-                <label for="nc-emailSubject" class="block text-xs font-semibold text-slate-700"
+                <label for="nc-emailSubject" class="album-caps block text-[10px] text-slate-700"
                   >Asunto</label
                 >
                 <input
@@ -226,12 +193,12 @@ import { SendEmailRequest } from '../../core/models/notification.model';
                   id="nc-emailSubject"
                   required
                   placeholder="Confirmación de pedido especial"
-                  class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  class="mt-2 w-full border border-ink bg-transparent px-3 py-2.5 text-base focus:border-pitch focus:outline-none focus:ring-0"
                 />
               </div>
 
               <div>
-                <label for="nc-emailBody" class="block text-xs font-semibold text-slate-700"
+                <label for="nc-emailBody" class="album-caps block text-[10px] text-slate-700"
                   >Cuerpo del mensaje</label
                 >
                 <textarea
@@ -241,7 +208,7 @@ import { SendEmailRequest } from '../../core/models/notification.model';
                   required
                   rows="4"
                   placeholder="Escribe el contenido de la notificación..."
-                  class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                  class="mt-2 w-full border border-ink bg-transparent px-3 py-2.5 text-base focus:border-pitch focus:outline-none focus:ring-0"
                 ></textarea>
               </div>
 
@@ -250,11 +217,11 @@ import { SendEmailRequest } from '../../core/models/notification.model';
                 [disabled]="
                   notificationService.sending() || !emailTo || !emailSubject || !emailBody
                 "
-                class="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:bg-slate-300"
+                class="album-caps flex w-full items-center justify-center gap-2 bg-ink py-4 text-[11px] text-paper transition-colors hover:bg-pitch disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-600"
               >
                 @if (notificationService.sending()) {
-                  <span class="animate-spin text-sm">↻</span>
-                  <span>Enviando notificación...</span>
+                  <span class="animate-spin" aria-hidden="true">↻</span>
+                  <span>Enviando…</span>
                 } @else {
                   <span>Enviar Notificación</span>
                 }

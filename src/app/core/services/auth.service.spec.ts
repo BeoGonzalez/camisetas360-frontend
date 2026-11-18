@@ -5,6 +5,8 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { MsalService } from '@azure/msal-angular';
 import { AuthService } from './auth.service';
 import { CognitoAuthService } from './cognito-auth.service';
+import { CartService } from './cart.service';
+import { Router } from '@angular/router';
 import { environment } from '../../../environments/environment';
 import { ApiError } from '../http/api-error';
 
@@ -107,6 +109,57 @@ describe('AuthService', () => {
       const auth = crear();
       expect(auth.isCustomer()).toBe(true);
       expect(auth.isAdmin()).toBe(false);
+    });
+
+    it('recomendaciones solo para clientes con sesión Entra (recommendation no acepta Cognito)', () => {
+      cuentaEntra = entra(['CUSTOMER']);
+      expect(crear().canSeeRecommendations()).toBe(true);
+      TestBed.resetTestingModule();
+      cuentaEntra = null;
+      cognito = { logged: true, roles: ['CUSTOMER'] };
+      expect(crear().canSeeRecommendations()).toBe(false);
+      TestBed.resetTestingModule();
+      cognito = { logged: false, roles: [] };
+      cuentaEntra = entra(['ADMIN']);
+      expect(crear().canSeeRecommendations()).toBe(false);
+    });
+  });
+
+  describe('logout (dejar el navegador listo para otra persona)', () => {
+    function crearConEspias() {
+      const auth = crear();
+      const cognitoSvc = TestBed.inject(CognitoAuthService) as unknown as {
+        logout: ReturnType<typeof vi.fn>;
+      };
+      cognitoSvc.logout = vi.fn();
+      const msal = TestBed.inject(MsalService) as unknown as {
+        logoutRedirect: ReturnType<typeof vi.fn>;
+      };
+      msal.logoutRedirect = vi.fn(() => ({ subscribe: vi.fn() }));
+      const cart = TestBed.inject(CartService);
+      const reset = vi.spyOn(cart, 'reset');
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+      return { auth, cognitoSvc, msal, reset, navigate };
+    }
+
+    it('Cognito: cierra la sesión, limpia el carrito local y va al login', () => {
+      cognito = { logged: true, roles: ['CUSTOMER'] };
+      const { auth, cognitoSvc, msal, reset, navigate } = crearConEspias();
+      auth.logout();
+      expect(cognitoSvc.logout).toHaveBeenCalled();
+      expect(reset).toHaveBeenCalled();
+      expect(navigate).toHaveBeenCalledWith(['/auth/login']);
+      expect(msal.logoutRedirect).not.toHaveBeenCalled();
+      expect(auth.profile()).toBeNull();
+    });
+
+    it('Entra: limpia el carrito local y delega la vuelta en logoutRedirect', () => {
+      cuentaEntra = entra(['CUSTOMER']);
+      const { auth, msal, reset, navigate } = crearConEspias();
+      auth.logout();
+      expect(reset).toHaveBeenCalled();
+      expect(msal.logoutRedirect).toHaveBeenCalled();
+      expect(navigate).not.toHaveBeenCalled();
     });
   });
 

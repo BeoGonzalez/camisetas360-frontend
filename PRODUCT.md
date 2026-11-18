@@ -35,7 +35,7 @@ Una tienda de camisetas por equipo y por tipo: cada equipo tiene su camiseta loc
 ## Evidence on Hand
 
 - 63 productos reales en el catálogo (Premier League 2026/27: local/visitante/alternativa de 20 equipos, más 3 genéricas), con equipo, tipo, liga, precio, stock y descripción.
-- **Fotos de producto: ninguna todavía.** Las sube el admin desde `/admin/productos`; el diseño debe verse completo sin foto y no debe inventar imágenes de producto.
+- **Fotos de producto:** el frontend trae fotos estáticas (AVIF) de las camisetas 2026/27 de 20 equipos de la Premier en `public/camisetas/`. Una foto subida por el admin desde `/admin/productos` tiene prioridad. El diseño debe verse completo sin foto (silueta impresa) y no debe inventar imágenes de producto.
 - No existen testimonios, reseñas, prensa, promociones, plazos de despacho, políticas de envío ni de devolución: **no inventarlos** (es un proyecto académico, no vende de verdad).
 - Sin escudos ni marcas registradas de clubes como activos.
 

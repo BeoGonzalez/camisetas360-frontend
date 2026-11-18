@@ -19,6 +19,10 @@ import { ApiError } from '../../core/http/api-error';
 import { ApiErrorComponent } from '../../shared/components/api-error/api-error.component';
 import { ProductImageComponent } from '../../shared/components/product-image/product-image.component';
 import { ClpPipe } from '../../shared/pipes/clp.pipe';
+import { TeamLogoComponent } from '../../shared/components/team-logo/team-logo.component';
+import { LEAGUE_LOGO_URLS } from '../../shared/components/team-logo/team-logos';
+import { slug } from '../../shared/utils/slug';
+import { estiloEquipo } from '../../shared/utils/team-colors';
 import { RecommendationsComponent } from '../recommendations/recommendations.component';
 
 /** Una página del álbum: un equipo (o las camisetas sin club) con sus casilleros. */
@@ -32,14 +36,7 @@ interface PaginaAlbum {
 const SIN_EQUIPO = 'otras-camisetas';
 const STOCK_BAJO = 5;
 
-export function slug(texto: string): string {
-  return texto
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
+export { slug };
 
 function ordenTipo(p: Product): number {
   return p.kitType ? KIT_TYPES.indexOf(p.kitType) : KIT_TYPES.length;
@@ -50,12 +47,22 @@ function ordenTipo(p: Product): number {
  * página del equipo elegido con sus casilleros numerados. La lista NO llama al detalle por
  * producto (eso registra visitas en el backend).
  */
+/**
+ * Categoría con la que se filtra el catálogo: la liga si la camiseta pertenece a una
+ * (todas las de la Premier League quedan en "Premier League" y las de la Serie A en "Serie A");
+ * las camisetas sin liga conservan su categoría.
+ */
+export function categoriaDe(p: Pick<Product, 'league' | 'category'>): string {
+  return p.league?.trim() || p.category;
+}
+
 @Component({
   selector: 'app-catalog',
   standalone: true,
   imports: [
     RouterLink,
     ApiErrorComponent,
+    TeamLogoComponent,
     RecommendationsComponent,
     ProductImageComponent,
     ClpPipe,
@@ -72,7 +79,9 @@ function ordenTipo(p: Product): number {
       </p>
     }
 
-    <div class="grid border-y border-ink lg:grid-cols-[minmax(260px,320px)_1fr]">
+    <!-- Las variables --eq* llevan el color del club de la página abierta (banda, número,
+         botón, pestaña activa). Sin club: las tintas del álbum. -->
+    <div class="grid border-y border-ink lg:grid-cols-[minmax(260px,320px)_1fr]" [style]="estilo()">
       <!-- Índice del álbum -->
       <aside
         class="flex min-w-0 flex-col border-ink bg-paper-2 px-5 py-5 sm:px-8 lg:block lg:border-r lg:py-10"
@@ -125,25 +134,35 @@ function ordenTipo(p: Product): number {
           <nav aria-label="Índice de equipos" class="order-2 mt-4 lg:mt-8">
             <ol
               #indice
-              class="-mx-5 flex overflow-x-auto px-5 lg:mx-0 lg:block lg:overflow-visible lg:px-0"
+              class="-mx-5 flex gap-1 overflow-x-auto px-5 lg:-mx-3 lg:block lg:overflow-visible lg:px-0"
             >
               @for (pg of paginas(); track pg.key) {
-                <li class="shrink-0 lg:border-t lg:border-rule">
+                <li class="shrink-0 lg:border-t lg:border-rule lg:first:border-t-0">
                   <button
                     type="button"
                     (click)="abrir(pg.key)"
                     [attr.data-equipo]="pg.key"
                     [attr.aria-current]="pg.key === actual()?.key ? 'page' : null"
-                    class="flex w-full flex-col items-start gap-0.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-left lg:flex-row lg:items-baseline lg:justify-between lg:gap-4 lg:whitespace-normal text-[13px] font-semibold uppercase tracking-[0.12em] transition-colors lg:border-b-0 lg:px-0 lg:py-2.5"
+                    class="flex w-full flex-col items-start gap-0.5 whitespace-nowrap px-3 py-2.5 text-left text-[13px] font-semibold uppercase tracking-[0.12em] transition-colors lg:flex-row lg:items-center lg:justify-between lg:gap-4 lg:whitespace-normal"
                     [class]="
                       pg.key === actual()?.key
-                        ? 'border-pitch text-pitch'
-                        : 'border-transparent text-ink hover:text-pitch'
+                        ? 'bg-[var(--eq)] text-[var(--eq-sobre)]'
+                        : 'text-ink hover:bg-paper'
                     "
                   >
-                    <span>{{ pg.titulo }}</span>
+                    <span class="flex items-center gap-2">
+                      @if (pg.key !== sinEquipo) {
+                        <app-team-logo
+                          class="h-5 w-5"
+                          [team]="pg.titulo"
+                          [lamina]="pg.key === actual()?.key"
+                        />
+                      }
+                      {{ pg.titulo }}
+                    </span>
                     <span
-                      class="tnum shrink-0 whitespace-nowrap text-[11px] tracking-[0.08em] text-slate-600 lg:text-[12px]"
+                      class="tnum shrink-0 whitespace-nowrap text-[11px] tracking-[0.08em] lg:text-[12px]"
+                      [class.text-slate-600]="pg.key !== actual()?.key"
                       >{{ rango(pg) }}</span
                     >
                   </button>
@@ -175,28 +194,58 @@ function ordenTipo(p: Product): number {
           </div>
         } @else if (actual(); as pg) {
           @for (p of [pg]; track p.key) {
-            <div class="animate-page-turn">
-              <header class="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
-                <h2
-                  class="album-display hyphens-auto text-[clamp(34px,8vw,112px)] [overflow-wrap:anywhere]"
-                  lang="es"
-                >
-                  {{ pg.titulo }}
-                </h2>
-                <p class="album-caps pb-2 text-[11px] text-slate-700">
-                  {{ pg.liga ?? 'Sin liga' }} · {{ pg.productos.length }}
-                  {{ pg.productos.length === 1 ? 'camiseta' : 'camisetas' }}
-                </p>
+            <div class="animate-page-turn -mx-5 -mt-6 sm:-mx-8 sm:-mt-8 lg:-mx-12 lg:-mt-10">
+              <!-- Banda del club a todo el ancho de la página, con el ribete en su color secundario. -->
+              <header
+                class="border-b-[6px] border-[var(--eq-2)] bg-[var(--eq)] px-5 pb-5 pt-6 text-[var(--eq-sobre)] transition-colors duration-500 sm:px-8 sm:pt-8 lg:px-12 lg:pt-10"
+              >
+                <div class="@container flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+                  <h2
+                    class="album-display flex min-w-0 items-start gap-[0.3em] text-[length:clamp(20px,calc(100cqi/(var(--largo)+1.4)),104px)] [overflow-wrap:break-word]"
+                    [style.--largo]="largoTitulo(pg.titulo)"
+                    lang="es"
+                  >
+                    <!-- Tamaño según el ancho de la página (cqi) y la palabra más larga del nombre:
+                       "Wolverhampton" cabe entera sin cortarse. 1 letra ≈ 1em en esta fuente
+                       ancha; +1.4em por el escudo y el espacio. El escudo va en la primera línea. -->
+                    @if (pg.key !== sinEquipo) {
+                      <app-team-logo
+                        class="h-[0.95em] w-[0.95em]"
+                        [team]="pg.titulo"
+                        [lamina]="true"
+                      />
+                    }
+                    <span class="min-w-0">{{ pg.titulo }}</span>
+                  </h2>
+                  <p class="album-caps flex items-center gap-2.5 pb-2 text-[11px]">
+                    @if (logoLiga(pg.liga); as logo) {
+                      <img
+                        [src]="logo"
+                        alt=""
+                        aria-hidden="true"
+                        class="lamina h-7 w-7 object-contain"
+                        decoding="async"
+                      />
+                    }
+                    <span
+                      >{{ pg.liga ?? 'Sin liga' }} · {{ pg.productos.length }}
+                      {{ pg.productos.length === 1 ? 'camiseta' : 'camisetas' }}</span
+                    >
+                  </p>
+                </div>
               </header>
 
-              <div class="mt-6 grid gap-x-8 gap-y-12 sm:mt-8 sm:grid-cols-2 xl:grid-cols-3">
+              <div
+                class="mt-6 grid gap-x-8 gap-y-12 px-5 sm:mt-8 sm:grid-cols-2 sm:px-8 lg:px-12 xl:grid-cols-3"
+              >
                 @for (product of pg.productos; track product.sku) {
                   <article class="flex flex-col">
+                    <!-- Casillero teñido apenas con el color del club. -->
                     <div
-                      class="album-slot relative aspect-[2/1] overflow-hidden sm:aspect-[4/3] xl:aspect-square"
+                      class="album-slot relative aspect-[2/1] overflow-hidden bg-[color-mix(in_oklab,var(--eq)_7%,var(--color-paper))] sm:aspect-[4/3] xl:aspect-square"
                     >
                       <span
-                        class="tnum animate-tick absolute left-3 top-2.5 z-10 text-[13px] font-bold tracking-[0.16em] text-pitch"
+                        class="tnum animate-tick absolute left-3 top-2.5 z-10 text-[13px] font-bold tracking-[0.16em] eq-num"
                         >{{ numero(product) }}</span
                       >
                       @if (product.stock > 0 && product.stock <= stockBajo) {
@@ -208,6 +257,8 @@ function ordenTipo(p: Product): number {
                         class="h-full p-6"
                         [sku]="product.sku"
                         [version]="product.imageVersion"
+                        [team]="product.team"
+                        [kitType]="product.kitType"
                         [alt]="product.name"
                       />
                     </div>
@@ -237,7 +288,7 @@ function ordenTipo(p: Product): number {
                           (click)="addToCart(product)"
                           [disabled]="product.stock <= 0 || adding() === product.sku"
                           [attr.aria-label]="'Añadir ' + product.name + ' al carrito'"
-                          class="album-caps w-full bg-ink py-3.5 text-[11px] text-paper transition-colors hover:bg-pitch disabled:cursor-not-allowed disabled:bg-transparent disabled:text-slate-500 disabled:outline disabled:outline-1 disabled:outline-rule"
+                          class="album-caps w-full bg-[var(--eq)] py-3.5 text-[11px] text-[var(--eq-sobre)] transition-colors hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:bg-transparent disabled:text-slate-500 disabled:outline disabled:outline-1 disabled:outline-rule"
                         >
                           {{
                             product.stock <= 0
@@ -253,7 +304,7 @@ function ordenTipo(p: Product): number {
                           (click)="comprarSinSesion(product)"
                           [disabled]="product.stock <= 0"
                           [attr.aria-label]="'Comprar ' + product.name"
-                          class="album-caps w-full bg-ink py-3.5 text-[11px] text-paper transition-colors hover:bg-pitch disabled:cursor-not-allowed disabled:bg-transparent disabled:text-slate-500 disabled:outline disabled:outline-1 disabled:outline-rule"
+                          class="album-caps w-full bg-[var(--eq)] py-3.5 text-[11px] text-[var(--eq-sobre)] transition-colors hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:bg-transparent disabled:text-slate-500 disabled:outline disabled:outline-1 disabled:outline-rule"
                         >
                           {{ product.stock <= 0 ? 'Agotado' : 'Comprar' }}
                         </button>
@@ -285,7 +336,7 @@ function ordenTipo(p: Product): number {
       </section>
     </div>
 
-    @if (auth.isCustomer()) {
+    @if (auth.canSeeRecommendations()) {
       <app-recommendations title="Recomendado para ti" fuente="modelo" />
     }
   `,
@@ -297,6 +348,7 @@ export class CatalogComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   readonly auth = inject(AuthService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly logosLiga = inject(LEAGUE_LOGO_URLS);
 
   readonly products = signal<Product[]>([]);
   readonly loading = signal<boolean>(true);
@@ -309,15 +361,11 @@ export class CatalogComponent implements OnInit {
   readonly equipo = signal<string | null>(null);
   readonly skeletons = [0, 1, 2];
   readonly stockBajo = STOCK_BAJO;
+  readonly sinEquipo = SIN_EQUIPO;
 
+  /** Categorías del filtro: la liga de cada camiseta (Premier League, Serie A...) o su categoría. */
   readonly categories = computed(() =>
-    [
-      ...new Set(
-        this.products()
-          .map((p) => p.category)
-          .filter(Boolean),
-      ),
-    ].sort(),
+    [...new Set(this.products().map(categoriaDe).filter(Boolean))].sort(),
   );
 
   readonly filtered = computed(() => {
@@ -325,7 +373,7 @@ export class CatalogComponent implements OnInit {
     const cat = this.category();
     return this.products().filter(
       (p) =>
-        (!cat || p.category === cat) &&
+        (!cat || categoriaDe(p) === cat) &&
         (!q ||
           [p.name, p.sku, p.description, p.team, p.kitType ? KIT_TYPE_LABEL[p.kitType] : null].some(
             (v) => v?.toLowerCase().includes(q),
@@ -367,6 +415,12 @@ export class CatalogComponent implements OnInit {
     return pgs.find((p) => p.key === this.equipo()) ?? pgs[0] ?? null;
   });
 
+  /** Colores del club de la página abierta («Otras camisetas»: las tintas del álbum). */
+  readonly estilo = computed(() => {
+    const pg = this.actual();
+    return estiloEquipo(pg && pg.key !== SIN_EQUIPO ? pg.titulo : null);
+  });
+
   ngOnInit(): void {
     this.route.queryParamMap
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -396,6 +450,16 @@ export class CatalogComponent implements OnInit {
   abrir(key: string): void {
     this.equipo.set(key);
     this.router.navigate([], { relativeTo: this.route, queryParams: { equipo: key } });
+  }
+
+  /** Logo de la liga registrado en `LEAGUE_LOGOS` (o null: solo el texto). */
+  logoLiga(liga: string | null): string | null {
+    return liga ? (this.logosLiga[slug(liga)] ?? null) : null;
+  }
+
+  /** Letras de la palabra más larga del título (mínimo 8: los nombres cortos no se agrandan más). */
+  largoTitulo(titulo: string): number {
+    return Math.max(8, ...titulo.split(/\s+/).map((w) => w.length));
   }
 
   numero(p: Product): string {

@@ -29,7 +29,14 @@ describe('ProductDetailComponent', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         provideRouter([]),
-        { provide: AuthService, useValue: { isCustomer: () => true, isLoggedIn: () => true } },
+        {
+          provide: AuthService,
+          useValue: {
+            isCustomer: () => true,
+            canSeeRecommendations: () => true,
+            isLoggedIn: () => true,
+          },
+        },
         {
           provide: ActivatedRoute,
           useValue: { paramMap: params, snapshot: { paramMap: params.value } },

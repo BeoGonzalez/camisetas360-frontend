@@ -209,6 +209,28 @@ describe('CognitoAuthService', () => {
       expect(service.isLoggedIn()).toBe(false);
     });
 
+    it('tokenVencido: sin token, ilegible, sin exp o expirado => true; vigente => false', () => {
+      const ahora = 1_800_000_000_000;
+      const conToken = (accessToken: string) => {
+        localStorage.setItem(
+          'c360_cognito_session',
+          JSON.stringify({ user: { roles: ['ADMIN'] }, accessToken, idToken: 'i' }),
+        );
+        TestBed.resetTestingModule();
+        TestBed.configureTestingModule({
+          imports: [HttpClientTestingModule],
+          providers: [CognitoAuthService],
+        });
+        return TestBed.inject(CognitoAuthService);
+      };
+      expect(service.tokenVencido(ahora)).toBe(true); // sin sesión
+      expect(conToken('no-es-jwt').tokenVencido(ahora)).toBe(true);
+      expect(conToken(jwt({ sub: 's' })).tokenVencido(ahora)).toBe(true);
+      expect(conToken(jwt({ exp: ahora / 1000 - 1 })).tokenVencido(ahora)).toBe(true);
+      expect(conToken(jwt({ exp: ahora / 1000 + 3600 })).tokenVencido(ahora)).toBe(false);
+      localStorage.clear();
+    });
+
     it('sin grupos conocidos queda como CUSTOMER', async () => {
       const url = new URL(await service.urlHostedUi('/catalog'));
       service.completarHostedUi('c', url.searchParams.get('state')).subscribe();

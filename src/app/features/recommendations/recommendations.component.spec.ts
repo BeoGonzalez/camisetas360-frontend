@@ -90,6 +90,84 @@ describe('RecommendationsComponent', () => {
     http.expectOne(url).flush(body);
   });
 
+  it('datos incompletos del backend no rompen el panel', () => {
+    const f = TestBed.createComponent(RecommendationsComponent);
+    f.componentRef.setInput('showProfile', true);
+    f.detectChanges();
+    http.expectOne(url).flush({ items: null, perfil: null, generadoEn: null });
+    f.detectChanges();
+    expect(f.nativeElement.textContent).toContain('Aún no tenemos recomendaciones');
+  });
+
+  it('no muestra % de coincidencia si el score de analytics no está en 0..1', () => {
+    const f = TestBed.createComponent(RecommendationsComponent);
+    f.detectChanges();
+    http.expectOne(url).flush({
+      ...body,
+      items: [
+        { ...body.items[0], score: 7.3 },
+        { ...body.items[1], sku: 'A' },
+      ],
+    });
+    f.detectChanges();
+    // también descarta el SKU duplicado
+    expect(f.componentInstance.items().length).toBe(1);
+    expect(f.nativeElement.textContent).not.toContain('match');
+  });
+
+  it('"Actualizar" repetido cancela la petición anterior', () => {
+    const f = TestBed.createComponent(RecommendationsComponent);
+    f.detectChanges();
+    const primera = http.expectOne(url);
+    f.componentInstance.load();
+    expect(primera.cancelled).toBe(true);
+    http.expectOne(url).flush(body);
+  });
+
+  it('"Comprar" agrega 1 unidad de la camiseta al carrito', () => {
+    const f = TestBed.createComponent(RecommendationsComponent);
+    f.detectChanges();
+    http.expectOne(url).flush(body);
+    f.detectChanges();
+
+    const boton: HTMLButtonElement = f.nativeElement.querySelector(
+      'button[aria-label="Comprar Camiseta A"]',
+    );
+    boton.click();
+    f.detectChanges();
+    expect(boton.disabled).toBe(true);
+
+    const post = http.expectOne(`${environment.apiGateway}/api/v1/carrito/items`);
+    expect(post.request.method).toBe('POST');
+    expect(post.request.body).toEqual({
+      sku: 'A',
+      nombre: 'Camiseta A',
+      categoria: 'Futbol',
+      precioUnitario: 100,
+      cantidad: 1,
+    });
+    post.flush({ items: [], subtotal: 0, total: 0 });
+    f.detectChanges();
+    expect(f.nativeElement.querySelector('[role="status"]').textContent).toContain(
+      'Camiseta A se añadió al carrito.',
+    );
+  });
+
+  it('"Comprar" sin stock muestra el error del backend', () => {
+    const f = TestBed.createComponent(RecommendationsComponent);
+    f.detectChanges();
+    http.expectOne(url).flush(body);
+    f.detectChanges();
+    f.componentInstance.comprar(f.componentInstance.items()[0]);
+    http
+      .expectOne(`${environment.apiGateway}/api/v1/carrito/items`)
+      .flush({ message: 'sin stock' }, { status: 422, statusText: 'Unprocessable' });
+    f.detectChanges();
+    const status: HTMLElement = f.nativeElement.querySelector('[role="status"]');
+    expect(status.className).toContain('text-red-800');
+    expect(f.componentInstance.comprando()).toBe('');
+  });
+
   describe('fuente="modelo" (GET /api/v1/recomendaciones)', () => {
     const modeloUrl = `${environment.apiGateway}/api/v1/recomendaciones`;
     const item = (posicion: number, sku: string, score: number) => ({

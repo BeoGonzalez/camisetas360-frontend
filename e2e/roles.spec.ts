@@ -115,6 +115,30 @@ test.describe('separación de roles', () => {
     expect(registro).toMatchObject({ email: 'ana@x.com', name: 'Ana', action: 'register' });
   });
 
+  test('"Cerrar sesión" en Mi perfil deja el navegador listo para otra persona', async ({
+    page,
+    api,
+  }) => {
+    await iniciarSesion(page, ['CUSTOMER']);
+    await api.json('**/api/v1/carrito', CARRITO_VACIO);
+
+    await page.goto('/perfil');
+    await expect(page.getByText('e2e@camisetas360.test').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Cerrar sesión' }).click();
+
+    await expect(page).toHaveURL(/\/auth\/login$/);
+    await expect(page.getByRole('tab', { name: 'Iniciar sesión' })).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem('c360_cognito_session'))).toBeNull();
+
+    // La barra ya no muestra al usuario anterior ni su carrito. (No se recarga: iniciarSesion
+    // usa addInitScript y reinyectaría la sesión en cada navegación.)
+    const nav = page.getByRole('navigation').first();
+    await expect(nav.getByRole('link', { name: 'Iniciar Sesión' })).toBeVisible();
+    await expect(nav.getByRole('link', { name: 'Mi perfil' })).toHaveCount(0);
+    await expect(nav.getByRole('link', { name: /Carrito/ })).toHaveCount(0);
+    await expect(nav.getByRole('button', { name: 'Salir' })).toHaveCount(0);
+  });
+
   test('sin sesión: una ruta protegida redirige al login conservando returnUrl', async ({
     page,
     api,

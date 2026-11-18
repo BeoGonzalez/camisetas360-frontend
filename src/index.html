@@ -1,15 +1,33 @@
 <!doctype html>
 <html lang="es">
-<head>
-  <meta charset="utf-8">
-  <title>Camisetas360 — El álbum de camisetas de la temporada</title>
-  <base href="/">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Camisetas360: el álbum de camisetas de la Premier League 2026/27. Local, visitante y alternativa de cada equipo. Proyecto académico.">
-  <meta name="theme-color" content="#161512">
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
-</head>
-<body>
-  <app-root></app-root>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <title>Camisetas360 — El álbum de camisetas de la temporada</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Camisetas360: el álbum de camisetas de la Premier League y la Serie A 2026/27. Local, visitante y alternativa de cada equipo. Proyecto académico."
+    />
+    <meta name="theme-color" content="#161512" />
+    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <!-- Aplica el modo oscuro antes de pintar (misma regla que ThemeService), sin parpadeo. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('c360_tema');
+          if (
+            t === 'oscuro' ||
+            (t !== 'claro' && matchMedia('(prefers-color-scheme: dark)').matches)
+          ) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            document.documentElement.style.colorScheme = 'dark';
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <app-root></app-root>
+  </body>
 </html>

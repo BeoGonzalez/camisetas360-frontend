@@ -55,7 +55,7 @@ test.describe('gestión de camisetas (/admin/productos)', () => {
     });
 
     await page.goto('/catalog');
-    await page.getByRole('navigation').first().getByRole('link', { name: 'Productos' }).click();
+    await page.getByRole('navigation').first().getByRole('link', { name: 'Panel admin' }).click();
     await expect(page.getByRole('heading', { name: 'Gestión de camisetas' })).toBeVisible();
 
     const arsenal = page.getByRole('region', { name: 'Arsenal' });
@@ -94,7 +94,7 @@ test.describe('gestión de camisetas (/admin/productos)', () => {
     expect(recibido.borrado).toBe('DELETE');
   });
 
-  test('CUSTOMER no ve "Productos" y /admin/productos lo manda a /sin-permiso', async ({
+  test('CUSTOMER no ve "Panel admin" y /admin/productos lo manda a /sin-permiso', async ({
     page,
     api,
   }) => {
@@ -105,7 +105,7 @@ test.describe('gestión de camisetas (/admin/productos)', () => {
 
     await page.goto('/catalog');
     await expect(
-      page.getByRole('navigation').first().getByRole('link', { name: 'Productos' }),
+      page.getByRole('navigation').first().getByRole('link', { name: 'Panel admin' }),
     ).toHaveCount(0);
     await page.goto('/admin/productos');
     await expect(page).toHaveURL(/\/sin-permiso$/);
