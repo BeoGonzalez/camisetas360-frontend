@@ -35,7 +35,7 @@ bash scripts/smoke-image.sh <imagen>   # salud de la imagen Docker (CI lo corre 
 
 ## Arquitectura
 
-Angular 22 standalone, Signals, Tailwind 4, sin librería de UI, templates inline. Rutas lazy en `app.routes.ts`, en español (`/catalog`, `/carrito`, `/pedidos`, `/pago`, `/perfil`, `/admin/productos`, `/admin/metricas`, `/sin-permiso`).
+Angular 22 standalone, Signals, Tailwind 4, sin librería de UI, templates inline. Rutas lazy en `app.routes.ts`, en español (`/` portada estática sin llamadas al backend, `/catalog`, `/carrito`, `/pedidos`, `/pago`, `/perfil`, `/admin/productos`, `/admin/metricas`, `/sin-permiso`).
 
 ### Capa de red (`core/`)
 - **Una sola base**: toda URL es `environment.apiGateway + environment.endpoints.<x>` (`{API_BASE}`). Nunca hosts/puertos de microservicios en código. En local, `proxy.conf.json` enruta cada prefijo `/api/v1/*` a su puerto de docker compose.

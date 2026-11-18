@@ -56,6 +56,9 @@ export function categoriaDe(p: Pick<Product, 'league' | 'category'>): string {
   return p.league?.trim() || p.category;
 }
 
+/** Categorías fijas del filtro del catálogo: solo ligas. */
+export const CATEGORIAS_CATALOGO: readonly string[] = ['Premier League', 'Serie A'];
+
 @Component({
   selector: 'app-catalog',
   standalone: true,
@@ -110,7 +113,7 @@ export function categoriaDe(p: Pick<Product, 'league' | 'category'>): string {
               class="mt-2 w-full border-0 border-b border-ink bg-transparent px-0 py-2 text-base focus:border-pitch focus:outline-none focus:ring-0"
             />
           </div>
-          @if (categories().length > 1) {
+          @if (categories().length) {
             <div>
               <label for="categoria" class="album-caps block text-[10px] text-slate-700 lg:mt-6"
                 >Categoría</label
@@ -363,10 +366,8 @@ export class CatalogComponent implements OnInit {
   readonly stockBajo = STOCK_BAJO;
   readonly sinEquipo = SIN_EQUIPO;
 
-  /** Categorías del filtro: la liga de cada camiseta (Premier League, Serie A...) o su categoría. */
-  readonly categories = computed(() =>
-    [...new Set(this.products().map(categoriaDe).filter(Boolean))].sort(),
-  );
+  /** Categorías del filtro: las ligas fijas (Premier League, Serie A). */
+  readonly categories = signal<readonly string[]>(CATEGORIAS_CATALOGO);
 
   readonly filtered = computed(() => {
     const q = this.query().trim().toLowerCase();
