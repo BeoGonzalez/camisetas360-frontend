@@ -60,6 +60,60 @@ describe('ProductImageComponent', () => {
     http.expectOne(`${url}?v=6`).flush(new Blob(['y']));
   });
 
+  describe('foto estática de la camiseta (equipo + tipo)', () => {
+    function renderEquipo(version: number | null, team: string, kitType: string) {
+      const f = TestBed.createComponent(ProductImageComponent);
+      f.componentRef.setInput('sku', 'SKU-A');
+      f.componentRef.setInput('version', version);
+      f.componentRef.setInput('alt', 'Camiseta');
+      f.componentRef.setInput('team', team);
+      f.componentRef.setInput('kitType', kitType);
+      f.detectChanges();
+      return f;
+    }
+    const src = (f: { nativeElement: HTMLElement }) =>
+      f.nativeElement.querySelector('img')?.getAttribute('src');
+
+    it('sin foto en el backend usa la del equipo y tipo, sin pedir nada a la API', () => {
+      const f = renderEquipo(null, 'Arsenal', 'VISITANTE');
+      http.expectNone(() => true);
+      expect(src(f)).toBe('camisetas/arsenal-visitante.avif');
+    });
+
+    it('reconoce el nombre largo del club', () => {
+      expect(src(renderEquipo(null, 'Tottenham Hotspur', 'ALTERNATIVA'))).toBe(
+        'camisetas/tottenham-alternativa.avif',
+      );
+    });
+
+    it('la foto subida al backend tiene prioridad', () => {
+      const f = renderEquipo(5, 'Arsenal', 'LOCAL');
+      http.expectOne(`${url}?v=5`).flush(new Blob(['x']));
+      f.detectChanges();
+      expect(src(f)).toBe('blob:foto');
+    });
+
+    it('si la foto del backend falla, cae a la foto estática', () => {
+      const f = renderEquipo(5, 'Arsenal', 'LOCAL');
+      http.expectOne(`${url}?v=5`).flush(null, { status: 404, statusText: 'Not Found' });
+      f.detectChanges();
+      expect(src(f)).toBe('camisetas/arsenal-local.avif');
+    });
+
+    it('si el archivo estático falla, muestra la silueta', () => {
+      const f = renderEquipo(null, 'Arsenal', 'LOCAL');
+      f.nativeElement.querySelector('img').dispatchEvent(new Event('error'));
+      f.detectChanges();
+      expect(f.nativeElement.querySelector('img')).toBeNull();
+      expect(f.nativeElement.textContent).toContain('Imagen no disponible');
+    });
+
+    it('un equipo sin fotos registradas muestra la silueta', () => {
+      const f = renderEquipo(null, 'Club Inventado', 'LOCAL');
+      expect(f.nativeElement.querySelector('img')).toBeNull();
+    });
+  });
+
   it('si la descarga falla vuelve al texto alternativo', () => {
     const f = render(5);
     http.expectOne(`${url}?v=5`).flush(null, { status: 404, statusText: 'Not Found' });

@@ -196,14 +196,6 @@ export function rutaSegura(url: string | null | undefined): string {
                         Crea una aquí
                       </button>
                     </p>
-                    <button
-                      type="button"
-                      (click)="loginWithDemoCredentials()"
-                      [disabled]="loading()"
-                      class="album-caps flex w-full items-center justify-center border border-dashed border-slot px-4 py-3 text-[10px] text-slate-700 transition-colors hover:border-ink hover:text-ink"
-                    >
-                      Acceso rápido (Usuario Demo Cognito)
-                    </button>
                   } @else {
                     <form (ngSubmit)="registrar()" class="space-y-3" novalidate>
                       <div>
@@ -405,13 +397,6 @@ export class LoginComponent implements OnInit {
       next: () => this.entrar(),
       error: (err: Error) => this.fallo(err, 'No se pudo crear la cuenta. Inténtalo nuevamente.'),
     });
-  }
-
-  /** Inicio de sesión rápido con credenciales demo preconfiguradas. */
-  loginWithDemoCredentials(): void {
-    this.email = 'usuario@camisetas360.com';
-    this.password = 'Password123!';
-    this.loginWithCognito();
   }
 
   /** Hosted UI de Cognito (OAuth code + PKCE); al volver se completa en handleCognitoCallback. */

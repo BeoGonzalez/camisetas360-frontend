@@ -8,6 +8,9 @@
 @import '@fontsource-variable/archivo/wdth.css';
 @import 'tailwindcss';
 
+/* Modo oscuro por atributo (lo pone ThemeService), no por la media query: el usuario elige. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
 @theme {
   --font-sans: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif;
 
@@ -18,6 +21,7 @@
   --color-pitch: #1f5f3a;
   --color-rule: #c9c0ad;
   --color-slot: #9c9484;
+  --color-placeholder: #7a7466;
 
   /* slate → del papel a la tinta (cálido) */
   --color-slate-50: #f3efe6;
@@ -72,6 +76,73 @@
   --animate-tick: tick 0.5s var(--ease-out-expo) 0.18s both;
 }
 
+/* -------- Modo oscuro: «el álbum de noche» --------
+   El papel se vuelve un cartón casi negro y cálido, la tinta pasa a crema y el verde cancha se
+   aclara para seguir leyéndose. Se remapean los mismos tokens, así cada pantalla (también las
+   heredadas que usan slate/blue/white) cambia sin clases nuevas. Los colores de club (--eq*)
+   van en línea y no cambian: la banda del equipo se ve igual en ambos modos. */
+:root[data-theme='dark'] {
+  --color-paper: #121310;
+  --color-paper-2: #1c1d18;
+  --color-ink: #ece6d8;
+  --color-pitch: #6cc28b;
+  --color-rule: #3a3a32;
+  --color-slot: #6e6a5e;
+  --color-placeholder: #8f897b;
+
+  --color-slate-50: #121310;
+  --color-slate-100: #191a16;
+  --color-slate-200: #24251f;
+  --color-slate-300: #3a3a32;
+  --color-slate-400: #6e6a5e;
+  --color-slate-500: #918b7d;
+  --color-slate-600: #aca697;
+  --color-slate-700: #c6c0b2;
+  --color-slate-800: #ddd7c9;
+  --color-slate-900: #ece6d8;
+  --color-slate-950: #f6f2e9;
+
+  --color-blue-50: #0e1f15;
+  --color-blue-100: #13291c;
+  --color-blue-200: #1d3d2a;
+  --color-blue-300: #2b5a3d;
+  --color-blue-400: #3f7d55;
+  --color-blue-500: #529f6e;
+  --color-blue-600: #6cc28b;
+  --color-blue-700: #8ad1a3;
+  --color-blue-800: #aedfbf;
+  --color-blue-900: #d0eedb;
+  --color-blue-950: #e8f7ee;
+
+  /* Superficies «blancas» de pantallas heredadas: una capa de cartón un poco más clara. */
+  --color-white: #1c1d18;
+
+  /* Esmeralda y ámbar de pantallas heredadas (éxito / aviso): fondos oscuros, textos claros. */
+  --color-emerald-50: #10241a;
+  --color-emerald-100: #153022;
+  --color-emerald-200: #1e4430;
+  --color-emerald-500: #4fbf85;
+  --color-emerald-600: #6fd19c;
+  --color-emerald-700: #8adcb0;
+  --color-emerald-800: #a9e7c6;
+  --color-amber-50: #2a2010;
+  --color-amber-100: #33270f;
+  --color-amber-200: #4a3816;
+  --color-amber-300: #6a5020;
+  --color-amber-400: #e0b25a;
+  --color-amber-500: #e8b864;
+  --color-amber-600: #f0c274;
+  --color-amber-700: #f3cd8a;
+  --color-amber-800: #f6d8a2;
+  --color-amber-900: #f9e4bd;
+
+  /* Rojo de error legible sobre el cartón oscuro. */
+  --color-red-50: #2a1412;
+  --color-red-600: #f07a70;
+  --color-red-700: #f28b82;
+  --color-red-800: #f6aaa3;
+}
+
 /* -------- Voces tipográficas del álbum -------- */
 @utility album-display {
   font-stretch: 125%;
@@ -96,6 +167,22 @@
 /* Casillero del álbum: borde punteado impreso, sin relleno. */
 @utility album-slot {
   border: 1.5px dashed var(--color-slot);
+}
+
+/* Lámina: el escudo o logo pegado sobre papel, para que se lea sobre cualquier banda de club. */
+@utility lamina {
+  /* Siempre papel crema, también en modo oscuro: es la lámina impresa. */
+  background-color: #f3efe6;
+  padding: 0.12em;
+}
+
+/* Número del casillero en el color del club. De noche, el color del club aclarado para que se
+   lea sobre el cartón oscuro (el acento de día es oscuro a propósito). */
+@utility eq-num {
+  color: var(--eq-acento);
+  [data-theme='dark'] & {
+    color: color-mix(in oklab, var(--eq) 55%, white);
+  }
 }
 
 /* Acción de texto con flecha, el CTA del álbum. */
@@ -222,7 +309,7 @@ h3 {
 
 input::placeholder,
 textarea::placeholder {
-  color: #7a7466;
+  color: var(--color-placeholder);
 }
 
 @media (prefers-reduced-motion: reduce) {

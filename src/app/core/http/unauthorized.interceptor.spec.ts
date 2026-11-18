@@ -14,8 +14,10 @@ describe('unauthorizedInterceptor', () => {
   let ctrl: HttpTestingController;
   let account: object | null;
   let cognitoLogged: boolean;
+  let cognitoVencido: boolean;
   const cognitoMock = {
     isLoggedIn: () => cognitoLogged,
+    tokenVencido: () => cognitoVencido,
     logout: vi.fn(() => (cognitoLogged = false)),
   };
   const acquireTokenRedirect = vi.fn(() => Promise.resolve());
@@ -30,6 +32,8 @@ describe('unauthorizedInterceptor', () => {
     navigate.mockClear();
     account = null;
     cognitoLogged = false;
+    cognitoVencido = false;
+    cognitoMock.logout.mockClear();
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(withInterceptors([unauthorizedInterceptor])),
@@ -106,15 +110,39 @@ describe('unauthorizedInterceptor', () => {
     });
   });
 
-  it('401 con sesión Cognito -> login (Cognito no tiene renovación)', () => {
+  it('401 de un servicio que acepta Cognito (catalog) -> login (Cognito no tiene renovación)', () => {
     account = { username: 'u' };
     cognitoLogged = true;
-    http.get(url).subscribe({ error: () => undefined });
-    flush401();
+    const catalog = `${environment.apiGateway}/api/v1/catalog/products/SKU-1`;
+    http.delete(catalog).subscribe({ error: () => undefined });
+    ctrl.expectOne(catalog).flush({}, { status: 401, statusText: 'Unauthorized' });
     expect(acquireTokenSilent).not.toHaveBeenCalled();
     expect(navigate).toHaveBeenCalled();
     // la sesión vencida se descarta: el login pide credenciales en vez de volver a la ruta
     expect(cognitoMock.logout).toHaveBeenCalled();
+  });
+
+  it('401 de un servicio solo-Entra con sesión Cognito vigente NO cierra la sesión', () => {
+    cognitoLogged = true;
+    const recos = `${environment.apiGateway}/api/v1/recomendaciones`;
+    let error: unknown;
+    http.get(recos).subscribe({ error: (e) => (error = e) });
+    ctrl.expectOne(recos).flush({}, { status: 401, statusText: 'Unauthorized' });
+    expect(error).toBeTruthy(); // la pantalla recibe el error
+    expect(cognitoMock.logout).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(acquireTokenSilent).not.toHaveBeenCalled();
+  });
+
+  it('401 con sesión Cognito vencida -> login aunque el servicio sea solo-Entra', () => {
+    cognitoLogged = true;
+    cognitoVencido = true;
+    http.get(url).subscribe({ error: () => undefined });
+    flush401();
+    expect(cognitoMock.logout).toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith(['/auth/login'], {
+      queryParams: { returnUrl: '/carrito' },
+    });
   });
 
   it('403 no dispara re-login (lo maneja la pantalla)', () => {

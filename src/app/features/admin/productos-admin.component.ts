@@ -8,6 +8,7 @@ import { ApiError } from '../../core/http/api-error';
 import { ApiErrorComponent } from '../../shared/components/api-error/api-error.component';
 import { ProductImageComponent } from '../../shared/components/product-image/product-image.component';
 import { ProductoFormComponent, ProductoPreset } from './producto-form.component';
+import { TeamLogoComponent } from '../../shared/components/team-logo/team-logo.component';
 
 type Estado = '' | 'sin-stock' | 'stock-bajo' | 'sin-foto';
 
@@ -29,7 +30,13 @@ const SIN_EQUIPO = '￿'; // ordena el grupo "sin equipo" al final
 @Component({
   selector: 'app-productos-admin',
   standalone: true,
-  imports: [ClpPipe, ApiErrorComponent, ProductImageComponent, ProductoFormComponent],
+  imports: [
+    ClpPipe,
+    ApiErrorComponent,
+    ProductImageComponent,
+    ProductoFormComponent,
+    TeamLogoComponent,
+  ],
   template: `
     <div class="space-y-6">
       <header class="flex flex-wrap items-end justify-between gap-3">
@@ -133,8 +140,11 @@ const SIN_EQUIPO = '￿'; // ordena el grupo "sin equipo" al final
             [attr.aria-label]="g.team ?? 'Sin equipo asignado'"
           >
             <header class="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-              <h2 class="album-display text-[clamp(32px,4vw,52px)]">
-                {{ g.team ?? 'Sin equipo asignado' }}
+              <h2 class="album-display flex items-center gap-3 text-[clamp(32px,4vw,52px)]">
+                @if (g.team) {
+                  <app-team-logo class="h-[0.9em] w-[0.9em]" [team]="g.team" />
+                }
+                <span>{{ g.team ?? 'Sin equipo asignado' }}</span>
               </h2>
               <p class="album-caps text-[10px] text-slate-700">
                 @if (g.league) {

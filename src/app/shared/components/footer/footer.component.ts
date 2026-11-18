@@ -21,7 +21,7 @@ import { RouterLink } from '@angular/router';
                   >Todos los equipos</a
                 >
               </li>
-              <li>Premier League 2026/27</li>
+              <li>Premier League y Serie A 2026/27</li>
               <li>Local, visitante y alternativa</li>
             </ul>
           </div>

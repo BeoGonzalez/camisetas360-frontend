@@ -54,7 +54,7 @@ import { RecommendationsComponent } from '../recommendations/recommendations.com
         <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <!-- Header con avatar -->
           <div
-            class="relative bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 px-8 py-12 text-center text-white"
+            class="relative bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 px-8 py-12 text-center text-white dark:from-blue-100 dark:via-blue-200 dark:to-blue-100 dark:text-ink"
           >
             <div class="absolute inset-0 opacity-10">
               <div
@@ -70,7 +70,9 @@ import { RecommendationsComponent } from '../recommendations/recommendations.com
                 {{ authService.userInitials() }}
               </div>
               <h2 class="mt-4 text-2xl font-extrabold">{{ profile()!.name }}</h2>
-              <p class="mt-1 text-sm text-blue-200/70">{{ profile()!.email }}</p>
+              <p class="mt-1 text-sm text-blue-200/70 dark:text-slate-700">
+                {{ profile()!.email }}
+              </p>
             </div>
           </div>
 
@@ -172,9 +174,33 @@ import { RecommendationsComponent } from '../recommendations/recommendations.com
         </div>
 
         <!-- Sección de recomendaciones de IA vinculadas al usuario -->
-        @if (authService.isCustomer()) {
+        @if (authService.canSeeRecommendations()) {
           <app-recommendations title="Tus intereses y recomendaciones" [showProfile]="true" />
         }
+      }
+
+      <!-- Cerrar sesión: siempre visible (también si el perfil no cargó). -->
+      @if (!loading()) {
+        <section
+          class="mt-10 flex flex-col gap-4 border-t border-ink pt-6 sm:flex-row sm:items-center sm:justify-between"
+          aria-labelledby="perfil-sesion"
+        >
+          <div>
+            <h2 id="perfil-sesion" class="album-caps text-[11px]">Sesión</h2>
+            <p class="mt-1 text-sm text-slate-600">
+              ¿Compartes este equipo? Cierra tu sesión para que otra persona pueda entrar con su
+              cuenta.
+            </p>
+          </div>
+          <button
+            type="button"
+            (click)="cerrarSesion()"
+            [disabled]="cerrando()"
+            class="album-caps shrink-0 border border-ink px-8 py-4 text-[11px] text-ink transition-colors hover:border-red-700 hover:bg-red-700 hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {{ cerrando() ? 'Cerrando sesión…' : 'Cerrar sesión' }}
+          </button>
+        </section>
       }
     </div>
   `,
@@ -189,7 +215,15 @@ export class ProfileComponent implements OnInit {
   /** Mensaje de error */
   readonly error = signal<ApiError | null>(null);
 
+  /** Evita doble clic mientras MSAL redirige (Entra) o se navega al login (Cognito). */
+  readonly cerrando = signal(false);
+
   constructor(readonly authService: AuthService) {}
+
+  cerrarSesion(): void {
+    this.cerrando.set(true);
+    this.authService.logout();
+  }
 
   ngOnInit(): void {
     this.loadProfile();

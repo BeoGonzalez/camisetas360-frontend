@@ -1,4 +1,5 @@
-import { Component, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import { ThemeService } from '../../../core/services/theme.service';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { CartService } from '../../../core/services/cart.service';
@@ -19,9 +20,9 @@ const LINK_ACTIVO = '!text-ink underline';
   imports: [RouterLink, RouterLinkActive, NotificationCenterComponent],
   template: `
     <div
-      class="album-caps flex h-8 items-center justify-center bg-ink px-4 text-center text-[10px] text-paper sm:text-[11px]"
+      class="album-caps flex h-8 items-center justify-center bg-ink px-4 text-center text-[10px] text-paper sm:text-[11px] dark:bg-blue-100 dark:text-ink"
     >
-      Premier League 2026/27<span class="max-sm:hidden"
+      Premier League y Serie A 2026/27<span class="max-sm:hidden"
         >&nbsp;· Local, visitante y alternativa</span
       >
     </div>
@@ -44,7 +45,7 @@ const LINK_ACTIVO = '!text-ink underline';
           @if (authService.isLoggedIn()) {
             @if (authService.canManageCatalog()) {
               <a routerLink="/admin/productos" [routerLinkActive]="activo" [class]="link"
-                >Productos</a
+                >Panel admin</a
               >
             }
             @if (authService.canSeeMetrics()) {
@@ -62,6 +63,37 @@ const LINK_ACTIVO = '!text-ink underline';
         </div>
 
         <div class="flex shrink-0 items-center gap-0.5 sm:gap-3">
+          <!-- Modo claro / oscuro: el ícono muestra el modo al que se cambia. -->
+          <button
+            type="button"
+            (click)="theme.alternar()"
+            class="p-2 text-ink transition-colors hover:text-pitch"
+            [attr.aria-label]="oscuro() ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
+            [title]="oscuro() ? 'Modo claro' : 'Modo oscuro'"
+            data-testid="cambiar-tema"
+          >
+            <svg
+              class="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="1.6"
+              aria-hidden="true"
+            >
+              @if (oscuro()) {
+                <!-- Sol -->
+                <circle cx="12" cy="12" r="4" />
+                <path
+                  stroke-linecap="square"
+                  d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"
+                />
+              } @else {
+                <!-- Luna -->
+                <path stroke-linejoin="miter" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" />
+              }
+            </svg>
+          </button>
+
           <button
             type="button"
             (click)="toggleNotificationCenter()"
@@ -183,7 +215,7 @@ const LINK_ACTIVO = '!text-ink underline';
             @if (authService.isLoggedIn()) {
               @if (authService.canManageCatalog()) {
                 <a routerLink="/admin/productos" (click)="closeMobileMenu()" [class]="mobileLink"
-                  >Productos</a
+                  >Panel admin</a
                 >
               }
               @if (authService.canSeeMetrics()) {
@@ -211,11 +243,13 @@ const LINK_ACTIVO = '!text-ink underline';
           </div>
         </div>
       }
-
-      @if (showNotificationCenter()) {
-        <app-notification-center (close)="closeNotificationCenter()" />
-      }
     </nav>
+
+    <!-- Fuera del <nav>: su backdrop-blur lo vuelve el bloque contenedor de los position:fixed
+         y el panel quedaba del alto de la barra en vez de la pantalla completa. -->
+    @if (showNotificationCenter()) {
+      <app-notification-center (close)="closeNotificationCenter()" />
+    }
   `,
 })
 export class NavbarComponent {
@@ -223,6 +257,9 @@ export class NavbarComponent {
   readonly activo = LINK_ACTIVO;
   readonly mobileLink =
     'album-caps flex items-center border-b border-rule py-4 text-[12px] text-ink last:border-b-0';
+
+  readonly theme = inject(ThemeService);
+  readonly oscuro = computed(() => this.theme.tema() === 'oscuro');
 
   readonly mobileMenuOpen = signal<boolean>(false);
   readonly showNotificationCenter = signal<boolean>(false);

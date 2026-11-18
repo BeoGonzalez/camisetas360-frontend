@@ -155,7 +155,7 @@ La estructura no sale de cajas sino de la imprenta: reglas finas de 1px en tinta
 La honestidad del producto es visual: si una camiseta no tiene foto, el casillero muestra la silueta impresa de una camiseta, nunca una imagen inventada. Las fotos las sube el administrador.
 
 **Key Characteristics:**
-- Papel crema con bandas más oscuras; dos tintas (negro tinta y verde cancha); rojo solo para errores.
+- Papel crema con bandas más oscuras; dos tintas (negro tinta y verde cancha) más el color del club en la página de cada equipo; rojo solo para errores.
 - Cero radios y cero sombras, por token: la profundidad la dan reglas de 1px, casilleros punteados y bandas.
 - Display en mayúsculas de ancho expandido (125%) con tracking amplio; rótulos en mayúsculas al 112% con 0.2em.
 - Cifras tabulares para precio, stock y numeración de casilleros (001, 002…).
@@ -184,8 +184,19 @@ Papel cálido y dos tintas planas, como un impreso de dos pasadas; todo lo demá
 
 La escala `slate-*` completa está remapeada en `src/styles.css` del papel (`50`) a la tinta (`900`, `950`), y `blue-*` al verde cancha; ver tonalidades en `.impeccable/design.json`.
 
+### Club Color (tercera tinta, por página)
+Cada página de equipo se imprime además con **el color de su club** (`shared/utils/team-colors.ts`, `TEAM_COLORS`). Cada equipo define cuatro roles, expuestos como variables CSS por `estiloEquipo()`:
+- `--eq` (**primario**): banda del título a todo el ancho, pestaña activa del índice, botón de compra (Añadir/Comprar) y regla superior de 6px del detalle.
+- `--eq-2` (**secundario**): ribete de 6px bajo la banda y franja del escudo de iniciales.
+- `--eq-sobre`: texto sobre el primario (AA ≥ 4.5:1).
+- `--eq-acento`: el color del club legible sobre el papel (AA en `paper` y `paper-2`): número del casillero y SKU del detalle.
+El casillero se tiñe con `color-mix(in oklab, var(--eq) 7%, paper)`. Un equipo sin color registrado y «Otras camisetas» usan las tintas del álbum (verde cancha). El escudo de iniciales (`app-team-logo`) se rellena con el primario del club en todas las pantallas. Hover de los botones del club: tinta.
+
+### Modo oscuro («el álbum de noche»)
+Botón sol/luna en el encabezado (`ThemeService`, preferencia en `localStorage['c360_tema']`; sin preferencia sigue al sistema). Pone `data-theme="dark"` en `<html>` y `styles.css` remapea ahí los mismos tokens: papel → cartón casi negro cálido (`#121310`, banda `#1c1d18`), tinta → crema (`#ece6d8`), verde cancha aclarado (`#6cc28b`), escalas `slate`/`blue` invertidas, y `white`, `emerald`, `amber` y `red` ajustados para las pantallas heredadas. Variante de Tailwind `dark:` disponible. Los colores de club no cambian; el número del casillero usa la utilidad `eq-num` (de noche, el color del club mezclado con blanco). Las láminas (`lamina`) son siempre crema. Un script en `index.html` aplica el tema antes de pintar para evitar el parpadeo.
+
 ### Named Rules
-**The Two Inks Rule.** Solo dos tintas: negro tinta y verde cancha. El rojo existe únicamente para errores. Ningún otro tono (ámbar, esmeralda, azul real) entra a una pantalla nueva.
+**The Two Inks + Club Rule.** Dos tintas fijas (negro tinta y verde cancha) más el color del club de la página abierta, y solo dentro de esa página (banda, casillero, número, botón, pestaña activa). Fuera de la página de un equipo no entra otro tono. El rojo de error existe únicamente para errores. Un equipo nuevo se registra en `TEAM_COLORS`; `team-colors.spec.ts` rechaza combinaciones que no cumplan AA.
 
 **The Palette Remap Rule.** El mundo se aplica remapeando la paleta de Tailwind (`slate` = papel→tinta, `blue` = verde cancha) en `@theme`. Una pantalla nueva usa los tokens `paper`/`ink`/`pitch`/`rule`/`slot`; nunca reintroduce `white` o grises fríos.
 
@@ -309,7 +320,7 @@ Por cada tipo que le falta a un equipo, un casillero punteado vacío que es un b
 
 ### Don't:
 - **Don't** usar tarjetas, esquinas redondeadas ni sombras; los tokens están en `0` y `none` a propósito.
-- **Don't** añadir un tercer color de acento (ámbar, esmeralda, azul) ni fondos `white`; el rojo se reserva para errores.
+- **Don't** añadir colores de acento sueltos (ámbar, esmeralda, azul) ni fondos `white`; el único tercer color es el del club, por página y vía `--eq*`. El rojo de error se reserva para errores.
 - **Don't** poner rótulos tipo "eyebrow" en mayúsculas encima de los encabezados.
 - **Don't** inventar imágenes de producto, escudos o marcas de clubes; las fotos las sube el administrador.
 - **Don't** usar cifras proporcionales en precios o stock, ni mostrar decimales en CLP.
