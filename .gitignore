@@ -52,3 +52,8 @@ pnpm-debug.log*
 # Configuración generada desde .env (scripts/write-env.mjs)
 !.env.example
 /src/environments/env.generated.ts
+# Claude Code skills instalados localmente
+.claude/skills/
+CLAUDE.md
+.claude*
+.impeccable

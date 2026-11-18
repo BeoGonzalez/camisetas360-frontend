@@ -29,11 +29,33 @@ export const TEAM_LOGOS: Readonly<Record<string, string>> = {
   'nottingham-forest': 'nottingham-forest.svg',
   sunderland: 'sunderland.svg',
   tottenham: 'tottenham.svg',
+  // Serie A
+  atalanta: 'atalanta.svg',
+  bologna: 'bologna.svg',
+  cagliari: 'cagliari.svg',
+  como: 'como.svg',
+  fiorentina: 'fiorentina.svg',
+  frosinone: 'frosinone.svg',
+  genoa: 'genoa.svg',
+  inter: 'inter.svg',
+  juventus: 'juventus.svg',
+  lazio: 'lazio.svg',
+  lecce: 'lecce.svg',
+  milan: 'milan.svg',
+  monza: 'monza.svg',
+  napoli: 'napoli.svg',
+  parma: 'parma.svg',
+  roma: 'roma.svg',
+  sassuolo: 'sassuolo.svg',
+  torino: 'torino.svg',
+  udinese: 'udinese.svg',
+  venezia: 'venezia.svg',
 };
 
 /** Logos de liga en `public/logos/ligas/`, por slug del nombre de la liga. */
 export const LEAGUE_LOGOS: Readonly<Record<string, string>> = {
   'premier-league': 'ligas/premier-league.svg',
+  'serie-a': 'ligas/serie-a.svg',
 };
 
 export const TEAM_LOGOS_BASE = 'logos/';

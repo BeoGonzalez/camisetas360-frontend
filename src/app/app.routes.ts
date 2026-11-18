@@ -8,6 +8,12 @@ import { roleGuard } from './core/guards/role.guard';
  */
 export const routes: Routes = [
   {
+    // Portada pública: la primera página que ve cualquier visitante.
+    path: '',
+    pathMatch: 'full',
+    loadComponent: () => import('./features/home/home.component').then((m) => m.HomeComponent),
+  },
+  {
     path: 'catalog',
     // Público: cualquier visitante (sin sesión, Cognito o Entra) puede ver el catálogo.
     loadChildren: () => import('./features/catalog/catalog.routes').then((m) => m.CATALOG_ROUTES),
@@ -44,6 +50,5 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./shared/components/forbidden/forbidden.component').then((m) => m.ForbiddenComponent),
   },
-  { path: '', redirectTo: 'catalog', pathMatch: 'full' },
-  { path: '**', redirectTo: 'catalog' },
+  { path: '**', redirectTo: '' },
 ];

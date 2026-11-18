@@ -32,6 +32,27 @@ export const EQUIPOS_CON_FOTOS: readonly string[] = [
   'nottingham-forest',
   'sunderland',
   'tottenham',
+  // Serie A
+  'atalanta',
+  'bologna',
+  'cagliari',
+  'como',
+  'fiorentina',
+  'frosinone',
+  'genoa',
+  'inter',
+  'juventus',
+  'lazio',
+  'lecce',
+  'milan',
+  'monza',
+  'napoli',
+  'parma',
+  'roma',
+  'sassuolo',
+  'torino',
+  'udinese',
+  'venezia',
 ];
 
 const ARCHIVO_TIPO: Record<KitType, string> = {

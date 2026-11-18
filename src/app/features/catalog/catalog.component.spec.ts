@@ -96,7 +96,7 @@ describe('CatalogComponent', () => {
     c.query.set('');
     c.category.set('Futbol');
     expect(c.filtered().length).toBe(2);
-    expect(c.categories()).toEqual(['Coleccion', 'Futbol']);
+    expect(c.categories()).toEqual(['Premier League', 'Serie A']);
   });
 
   it('las camisetas de una liga se agrupan en la categoría de su liga (Premier League, Serie A)', () => {
@@ -119,12 +119,13 @@ describe('CatalogComponent', () => {
         deLiga('SA-INT-LOC-2627', 'Serie A'),
       ]);
     const c = f.componentInstance;
-    expect(c.categories()).toEqual(['Coleccion', 'Futbol', 'Premier League', 'Serie A']);
+    expect(c.categories()).toEqual(['Premier League', 'Serie A']);
     c.category.set('Premier League');
     expect(c.filtered().map((p) => p.sku)).toEqual(['PL-ARS-LOC-2627', 'PL-CHE-VIS-2627']);
     c.category.set('Serie A');
     expect(c.filtered().map((p) => p.sku)).toEqual(['SA-INT-LOC-2627']);
-    // "Fútbol" ya no aparece: todas las camisetas con esa categoría tienen liga.
+    // "Coleccion" y "Fútbol" no son categorías del filtro.
+    expect(c.categories()).not.toContain('Coleccion');
     expect(c.categories()).not.toContain('Fútbol');
   });
 

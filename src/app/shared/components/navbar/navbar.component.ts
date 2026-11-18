@@ -31,9 +31,9 @@ const LINK_ACTIVO = '!text-ink underline';
         class="mx-auto flex h-18 max-w-[1440px] items-center justify-between gap-3 px-4 sm:gap-6 sm:px-8 lg:px-14"
       >
         <a
-          routerLink="/catalog"
+          routerLink="/"
           class="shrink-0 text-[13px] font-extrabold tracking-[0.26em] text-ink [font-stretch:125%] sm:text-[17px] sm:tracking-[0.42em]"
-          aria-label="Camisetas360, ir al álbum"
+          aria-label="Camisetas360, ir a la portada"
           >CAMISETAS<span class="text-pitch">360</span></a
         >
 
@@ -162,43 +162,52 @@ const LINK_ACTIVO = '!text-ink underline';
             </button>
           } @else {
             <a
+              routerLink="/catalog"
+              [routerLinkActive]="activo"
+              [class]="link + ' hidden px-1.5 py-2 sm:inline lg:hidden'"
+              >Catálogo</a
+            >
+            <a
               routerLink="/auth/login"
-              class="album-caps whitespace-nowrap bg-ink px-3 py-2.5 text-[10px] tracking-[0.14em] text-paper transition-colors hover:bg-pitch sm:px-4 sm:text-[11px] sm:tracking-[0.2em]"
+              class="album-caps whitespace-nowrap bg-ink px-3 py-2.5 max-sm:hidden text-[10px] tracking-[0.14em] text-paper transition-colors hover:bg-pitch sm:px-4 sm:text-[11px] sm:tracking-[0.2em]"
             >
               Iniciar Sesión
             </a>
           }
 
-          <!-- Sin sesión el menú solo tendría «Catálogo», que ya es el logotipo. -->
-          @if (authService.isLoggedIn()) {
-            <button
-              type="button"
-              (click)="toggleMobileMenu()"
-              class="p-2 text-ink lg:hidden"
-              [attr.aria-expanded]="mobileMenuOpen()"
-              aria-label="Abrir menú"
+          <!-- Con sesión, el menú baja de lg. Sin sesión, solo en móvil (sm+ ya muestra «Catálogo»
+               e «Iniciar sesión» en la barra). -->
+          <button
+            type="button"
+            (click)="toggleMobileMenu()"
+            class="p-2 text-ink"
+            [class]="authService.isLoggedIn() ? 'lg:hidden' : 'sm:hidden'"
+            [attr.aria-expanded]="mobileMenuOpen()"
+            aria-label="Abrir menú"
+          >
+            <svg
+              class="h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="1.6"
+              aria-hidden="true"
             >
-              <svg
-                class="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                stroke-width="1.6"
-                aria-hidden="true"
-              >
-                @if (mobileMenuOpen()) {
-                  <path stroke-linecap="square" d="M6 18 18 6M6 6l12 12" />
-                } @else {
-                  <path stroke-linecap="square" d="M4 7h16M4 12h16M4 17h16" />
-                }
-              </svg>
-            </button>
-          }
+              @if (mobileMenuOpen()) {
+                <path stroke-linecap="square" d="M6 18 18 6M6 6l12 12" />
+              } @else {
+                <path stroke-linecap="square" d="M4 7h16M4 12h16M4 17h16" />
+              }
+            </svg>
+          </button>
         </div>
       </div>
 
       @if (mobileMenuOpen()) {
-        <div class="animate-slide-down border-t border-ink bg-paper lg:hidden">
+        <div
+          class="animate-slide-down border-t border-ink bg-paper"
+          [class]="authService.isLoggedIn() ? 'lg:hidden' : 'sm:hidden'"
+        >
           <div class="mx-auto flex max-w-[1440px] flex-col px-4 py-2 sm:px-8">
             <a routerLink="/catalog" (click)="closeMobileMenu()" [class]="mobileLink">Catálogo</a>
             @if (authService.isLoggedIn() && authService.isCustomer()) {
@@ -239,6 +248,10 @@ const LINK_ACTIVO = '!text-ink underline';
                   Salir
                 </button>
               </p>
+            } @else {
+              <a routerLink="/auth/login" (click)="closeMobileMenu()" [class]="mobileLink"
+                >Iniciar Sesión</a
+              >
             }
           </div>
         </div>
