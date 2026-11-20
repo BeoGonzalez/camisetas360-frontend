@@ -18,8 +18,6 @@ const COMPRAS = JSON.stringify(
   [
     ['00000000-0000-0000-0000-000000000001', 15990],
     ['11111111-1111-1111-1111-111111111111', 15990],
-    ['22222222-2222-2222-2222-222222222222', 25000],
-    ['33333333-3333-3333-3333-333333333333', 15990],
   ].map(([requestId, montoPago]) => ({
     requestId,
     totalAmount: montoPago,
@@ -29,29 +27,12 @@ const COMPRAS = JSON.stringify(
   })),
 );
 
-// Generador de PAN válido según algoritmo de Luhn (16 dígitos)
-function generarPanValido(prefix = '4532'): string {
-  let pan15 = prefix;
-  while (pan15.length < 15) {
-    pan15 += Math.floor(Math.random() * 10).toString();
-  }
-  let sum = 0;
-  let shouldDouble = true;
-  for (let i = 14; i >= 0; i--) {
-    let digit = parseInt(pan15.charAt(i), 10);
-    if (shouldDouble) {
-      digit *= 2;
-      if (digit > 9) digit -= 9;
-    }
-    sum += digit;
-    shouldDouble = !shouldDouble;
-  }
-  const checkDigit = (10 - (sum % 10)) % 10;
-  return pan15 + checkDigit.toString();
-}
-
 test.describe('Flujo de Pago contra ms-pagos real @backend', () => {
-  // Contra el backend real: TC-05 depende del pago creado en TC-02 (orden secuencial).
+  /** Compra registrada que TC-02 paga con Webpay; TC-03 y TC-04 usan su pago. */
+  const ORDEN_WEBPAY = '11111111-1111-1111-1111-111111111111';
+  let pagoIdWebpay = '';
+
+  // Contra el backend real: TC-03 y TC-04 dependen del pago creado en TC-02 (orden secuencial).
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
@@ -75,143 +56,71 @@ test.describe('Flujo de Pago contra ms-pagos real @backend', () => {
     );
   });
 
-  test('TC-01: Formulario de Pago y validaciones reactivas (Luhn y campos)', async ({ page }) => {
+  test('TC-01: el formulario muestra el resumen y deriva la tarjeta a Webpay', async ({ page }) => {
     await page.goto('/pago/checkout/00000000-0000-0000-0000-000000000001');
 
-    // Verificar resumen de la orden
     await expect(page.locator('text=Finalizar Pago')).toBeVisible();
     await expect(page.locator('p.text-2xl.font-black')).toContainText(/15[.,]990/);
-
-    const btnPagar = page.locator('#btnPagar');
-    await expect(btnPagar).toBeDisabled();
-
-    // Ingresar tarjeta con dígito verificador inválido
-    const inputPan = page.locator('#numeroTarjeta');
-    await inputPan.fill('4532 0151 1283 0367');
-    await inputPan.blur();
-
-    // Mensaje de error de Luhn
-    await expect(page.locator('text=falla verificación Luhn')).toBeVisible();
-    await expect(btnPagar).toBeDisabled();
-
-    // Corregir a tarjeta válida
-    await inputPan.fill('4532 0151 1283 0366');
-    await expect(page.locator('text=falla verificación Luhn')).not.toBeVisible();
-
-    // Completar el resto de campos
-    await page.locator('#nombreTitular').fill('Carlos Valderrama');
-    await page.locator('#mesVencimiento').selectOption('12');
-    await page.locator('#anioVencimiento').selectOption('2028');
-    await page.locator('#cvv').fill('123');
-
-    // Botón habilitado
-    await expect(btnPagar).toBeEnabled();
+    await expect(page.getByText('Webpay de Transbank')).toBeVisible();
+    // Camisetas360 nunca pide la tarjeta.
+    await expect(page.locator('#numeroTarjeta, #cvv, input[autocomplete^="cc-"]')).toHaveCount(0);
+    await expect(page.locator('#btnPagar')).toBeEnabled();
+    await expect(page.locator('#btnPagar')).toContainText(/Pagar \$?15[.,]990 con Webpay/);
   });
 
-  test('TC-02: Flujo Completo de Pago Autorizado (Tarjeta terminada en 6)', async ({ page }) => {
-    const ordenId = '11111111-1111-1111-1111-111111111111';
-    await page.goto(`/pago/checkout/${ordenId}`);
-
-    await page.locator('#numeroTarjeta').fill('4532 0151 1283 0366');
-    await page.locator('#nombreTitular').fill('Carlos Valderrama');
-    await page.locator('#mesVencimiento').selectOption('12');
-    await page.locator('#anioVencimiento').selectOption('2028');
-    await page.locator('#cvv').fill('123');
-
-    // Clic en pagar
-    await page.locator('#btnPagar').click();
-
-    // El flujo navega al retorno y luego a /pago/resultado
-    await page.waitForURL(/\/pago\/resultado/, { timeout: 15000 });
-
-    // Validar comprobante autorizado
-    await expect(page.locator('text=¡Pago Autorizado!')).toBeVisible();
-    await expect(page.locator('text=Código de Autorización:')).toBeVisible();
-    await expect(page.locator('text=AUTH-')).toBeVisible();
-    await expect(page.locator('text=0366')).toBeVisible();
-    await expect(page.locator('dd.font-extrabold.text-blue-600')).toContainText(/15[.,]990/);
-  });
-
-  test('TC-03: Flujo de Pago Rechazado (Tarjeta terminada en 0 - fondos insuficientes)', async ({
+  test('TC-02: ms-pagos crea la transacción y el navegador va a Webpay con POST token_ws', async ({
     page,
   }) => {
-    const ordenId = '22222222-2222-2222-2222-222222222222';
-    await page.goto(`/pago/checkout/${ordenId}`);
+    await page.goto(`/pago/checkout/${ORDEN_WEBPAY}`);
 
-    // Tarjeta con Luhn válido terminada en 0 (determinísticamente fondos insuficientes)
-    await page.locator('#numeroTarjeta').fill('4532 0151 0000 0030');
-    await page.locator('#nombreTitular').fill('Diego Maradona');
-    await page.locator('#mesVencimiento').selectOption('12');
-    await page.locator('#anioVencimiento').selectOption('2028');
-    await page.locator('#cvv').fill('123');
-
+    const respuesta = page.waitForResponse(
+      (r) => r.url().endsWith('/api/v1/pago/webpay/iniciar') && r.request().method() === 'POST',
+    );
+    const haciaWebpay = page.waitForRequest(
+      (r) => r.method() === 'POST' && (r.postData() ?? '').startsWith('token_ws='),
+    );
     await page.locator('#btnPagar').click();
 
-    await page.waitForURL(/\/pago\/resultado/, { timeout: 15000 });
+    const res = await respuesta;
+    expect(res.status()).toBe(201);
+    expect(res.request().postDataJSON()).toEqual({ ordenId: ORDEN_WEBPAY, monto: 15990 });
+    const cuerpo = await res.json();
+    expect(cuerpo).toMatchObject({ ordenId: ORDEN_WEBPAY, monto: 15990 });
+    expect(cuerpo.token).toBeTruthy();
+    expect(cuerpo.url).toMatch(/^https:\/\//);
+    pagoIdWebpay = cuerpo.pagoId;
 
-    // Validar pantalla de rechazo
-    await expect(page.locator('text=Pago Rechazado')).toBeVisible();
-    await expect(page.locator('text=Fondos insuficientes')).toBeVisible();
-    await expect(page.locator('text=Reintentar con otra tarjeta')).toBeVisible();
+    const req = await haciaWebpay;
+    expect(req.url()).toBe(cuerpo.url);
+    expect(req.postData()).toBe(`token_ws=${encodeURIComponent(cuerpo.token)}`);
   });
 
-  test('TC-04: 4.º intento en < 10 s -> 429 y bloqueo de 30 minutos', async ({ page, request }) => {
-    const ordenId = '33333333-3333-3333-3333-333333333333';
-    // Generar tarjeta con Luhn válido nueva para no colisionar con ejecuciones anteriores
-    const panRáfaga = generarPanValido('4532');
-
-    // Disparar ráfaga de 3 intentos rápidos previos contra la API (dentro de los 10 segundos)
-    for (let i = 1; i <= 3; i++) {
-      const resp = await request.post('/api/v1/pago/iniciar', {
-        data: {
-          ordenId,
-          monto: 15990,
-          numeroTarjeta: panRáfaga,
-          cvv: '123',
-          mesVencimiento: 12,
-          anioVencimiento: 2028,
-          nombreTitular: 'Atacante Script',
-        },
-      });
-      expect(resp.status()).toBe(201);
-    }
-
-    // El 4.º intento se realiza desde la interfaz de usuario en menos de 10s
-    await page.goto(`/pago/checkout/${ordenId}`);
-    await page.locator('#numeroTarjeta').fill(panRáfaga);
-    await page.locator('#nombreTitular').fill('Atacante Script');
-    await page.locator('#mesVencimiento').selectOption('12');
-    await page.locator('#anioVencimiento').selectOption('2028');
-    await page.locator('#cvv').fill('123');
-
-    await page.locator('#btnPagar').click();
-
-    // El 4.º intento en < 10 s: el backend bloquea la tarjeta 30 min y la UI lo informa.
-    const bloqueo = page.getByTestId('bloqueo-pago');
-    await expect(bloqueo).toBeVisible({ timeout: 10000 });
-    await expect(bloqueo).toContainText('Pago bloqueado por seguridad');
-    await expect(bloqueo).toContainText('debes esperar 30 minutos antes de volver a comprar');
-    await expect(bloqueo).toContainText(/(30:00|29:[0-5]\d)/);
-    await expect(page.locator('#btnPagar')).toBeDisabled();
-    await expect(page.locator('button:has-text("Reintentar ahora")')).not.toBeVisible();
-
-    // Recargar no salta el bloqueo.
-    await page.reload();
-    await expect(page.getByTestId('bloqueo-pago')).toContainText(/29:[0-5]\d/);
-    await expect(page.locator('#btnPagar')).toBeDisabled();
+  test('TC-03: retorno RECHAZADO con un pago real: rechazada y reintento de la orden', async ({
+    page,
+  }) => {
+    expect(pagoIdWebpay, 'depende del pago creado en TC-02').toBeTruthy();
+    await page.goto(
+      `/pago/resultado?estado=RECHAZADO&pagoId=${pagoIdWebpay}&ordenId=${ORDEN_WEBPAY}`,
+    );
+    await expect(page.getByRole('heading', { name: 'Su compra ha sido rechazada' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Reintentar pago' })).toHaveAttribute(
+      'href',
+      `/pago/checkout/${ORDEN_WEBPAY}`,
+    );
+    await expect(page.getByRole('link', { name: 'Volver al carrito' })).toBeVisible();
   });
 
-  test('TC-05: Historial de pagos de una orden', async ({ page }) => {
-    const ordenId = '11111111-1111-1111-1111-111111111111';
-    await page.goto(`/pago/historial/${ordenId}`);
+  test('TC-04: Historial de pagos de una orden', async ({ page }) => {
+    await page.goto(`/pago/historial/${ORDEN_WEBPAY}`);
 
     await expect(page.locator('text=Historial de Pagos de la Orden')).toBeVisible();
-    await expect(page.locator(`text=${ordenId}`)).toBeVisible();
+    await expect(page.locator(`text=${ORDEN_WEBPAY}`)).toBeVisible();
     await expect(page.locator('table')).toBeVisible();
-    await expect(page.locator('text=Autorizado').first()).toBeVisible();
+    // TC-02 dejó una transacción iniciada (no se completa el pago en Transbank).
+    await expect(page.locator('td', { hasText: 'INICIADO' }).first()).toBeVisible();
   });
 
-  test('TC-06: Panel de Alertas Antifraude protegido para administradores (/pago/alertas)', async ({
+  test('TC-05: Panel de Alertas Antifraude protegido para administradores (/pago/alertas)', async ({
     page,
   }) => {
     await page.goto('/pago/alertas');

@@ -8,6 +8,7 @@ import {
   EstadoPago,
   IniciarPagoRequest,
   IniciarPagoResponse,
+  IniciarWebpayResponse,
   PagoError,
   PagoResponse,
 } from '../models/pago.model';
@@ -249,6 +250,72 @@ describe('PagoService', () => {
       expect(errorCapturado?.mensaje).toBe('El pago o token de transacción solicitado no existe.');
       // El mensaje crudo del backend repite el token: no debe llegar a la UI.
       expect(JSON.stringify(errorCapturado)).not.toContain('token_inexistente');
+    });
+  });
+
+  describe('Webpay Plus', () => {
+    const ORDEN = 'a1b2c3d4-e5f6-4a8b-9c0d-1e2f3a4b5c6d';
+
+    it('iniciarWebpay hace POST a /webpay/iniciar con orden y monto y devuelve token y url', () => {
+      const respuesta: IniciarWebpayResponse = {
+        pagoId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+        ordenId: ORDEN,
+        monto: 15990,
+        token: 'tok_webpay',
+        url: 'https://webpay3gint.transbank.cl/webpayserver/initTransaction',
+      };
+      let res: IniciarWebpayResponse | undefined;
+      service.iniciarWebpay({ ordenId: ORDEN, monto: 15990 }).subscribe((r) => (res = r));
+
+      const req = httpMock.expectOne(`${environment.apiGateway}/api/v1/pago/webpay/iniciar`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({ ordenId: ORDEN, monto: 15990 });
+      req.flush(respuesta, { status: 201, statusText: 'Created' });
+      expect(res).toEqual(respuesta);
+    });
+
+    it('iniciarWebpay mapea el 400 (orden ya pagada) a PagoError sin el texto crudo', () => {
+      let errorCapturado: PagoError | undefined;
+      service
+        .iniciarWebpay({ ordenId: ORDEN, monto: 15990 })
+        .subscribe({ error: (e: PagoError) => (errorCapturado = e) });
+
+      httpMock
+        .expectOne(`${service.apiUrl}/webpay/iniciar`)
+        .flush(
+          { error: 'BAD_REQUEST', mensaje: `La orden ${ORDEN} ya tiene un pago aprobado` },
+          { status: 400, statusText: 'Bad Request' },
+        );
+      expect(errorCapturado?.status).toBe(400);
+      expect(errorCapturado?.mensaje).not.toContain('ya tiene un pago aprobado');
+    });
+
+    describe('redirigirAWebpay', () => {
+      afterEach(() => {
+        vi.restoreAllMocks();
+        document.querySelectorAll('form').forEach((f) => f.remove());
+      });
+
+      it('envía un formulario POST a la url con el campo oculto token_ws', () => {
+        let enviado: HTMLFormElement | undefined;
+        const submit = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(function (
+          this: HTMLFormElement,
+        ) {
+          enviado = this;
+        });
+        const url = 'https://webpay3gint.transbank.cl/webpayserver/initTransaction';
+
+        service.redirigirAWebpay(url, 'tok_webpay');
+
+        expect(submit).toHaveBeenCalledTimes(1);
+        expect(enviado?.action).toBe(url);
+        expect(enviado?.method.toLowerCase()).toBe('post');
+        expect(enviado?.isConnected).toBe(true);
+        const campo = enviado?.querySelector<HTMLInputElement>('input[name="token_ws"]');
+        expect(campo?.type).toBe('hidden');
+        expect(campo?.value).toBe('tok_webpay');
+        expect(enviado?.querySelectorAll('input').length).toBe(1);
+      });
     });
   });
 

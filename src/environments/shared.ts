@@ -69,11 +69,8 @@ export const pagos = {
    * valor solo se usa si el 429 no lo trae.
    */
   bloqueoPorDefectoMinutos: 30,
-  /**
-   * La pasarela es simulada (WebpaySimuladoAdapter) y reconoce las tarjetas de prueba de
-   * Transbank, incluida una que no pasa Luhn. Poner en false al integrar Webpay real.
-   */
-  aceptarTarjetasPruebaTransbank: true,
+  // El pago usa Webpay Plus real: la tarjeta se ingresa en Webpay (Transbank), nunca en el
+  // frontend, así que no hay validación de tarjetas ni tarjetas de prueba que aceptar aquí.
 };
 
 export { ENV };
