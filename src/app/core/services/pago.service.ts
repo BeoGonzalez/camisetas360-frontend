@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, catchError, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -7,6 +8,8 @@ import {
   ConfirmarPagoRequest,
   IniciarPagoRequest,
   IniciarPagoResponse,
+  IniciarWebpayRequest,
+  IniciarWebpayResponse,
   PagoError,
   PagoResponse,
 } from '../models/pago.model';
@@ -44,6 +47,7 @@ export function enmascararPan(texto: string): string {
 })
 export class PagoService {
   private readonly http = inject(HttpClient);
+  private readonly document = inject(DOCUMENT);
 
   /** {API_BASE}/api/v1/pago. El servicio de pagos NO valida JWT (brecha #3). */
   readonly apiUrl = `${environment.apiGateway}${environment.endpoints.pago}`;
@@ -56,6 +60,33 @@ export class PagoService {
     return this.http
       .post<IniciarPagoResponse>(`${this.apiUrl}/iniciar`, request)
       .pipe(catchError((err: HttpErrorResponse) => this.handleError(err)));
+  }
+
+  /**
+   * Crea la transacción en Webpay Plus (Transbank).
+   * POST /api/v1/pago/webpay/iniciar
+   */
+  iniciarWebpay(request: IniciarWebpayRequest): Observable<IniciarWebpayResponse> {
+    return this.http
+      .post<IniciarWebpayResponse>(`${this.apiUrl}/webpay/iniciar`, request)
+      .pipe(catchError((err: HttpErrorResponse) => this.handleError(err)));
+  }
+
+  /**
+   * Envía el navegador a Webpay: formulario POST a `url` con el campo `token_ws`, como indica
+   * Transbank. Al terminar, Webpay devuelve al cliente al backend, que redirige a /pago/resultado.
+   */
+  redirigirAWebpay(url: string, token: string): void {
+    const form = this.document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+    const campo = this.document.createElement('input');
+    campo.type = 'hidden';
+    campo.name = 'token_ws';
+    campo.value = token;
+    form.appendChild(campo);
+    this.document.body.appendChild(form);
+    form.submit();
   }
 
   /**

@@ -37,6 +37,24 @@ export interface IniciarPagoResponse {
   tarjetaMarca: string;
 }
 
+/** POST /api/v1/pago/webpay/iniciar: la tarjeta se ingresa en Webpay, no en Camisetas360. */
+export interface IniciarWebpayRequest {
+  ordenId: string;
+  monto: number;
+}
+
+/** 201 de POST /api/v1/pago/webpay/iniciar: enviar el navegador a `url` con `token_ws=token` (POST). */
+export interface IniciarWebpayResponse {
+  pagoId: string;
+  ordenId: string;
+  monto: number;
+  token: string;
+  url: string;
+}
+
+/** Resultado que el backend informa al volver de Webpay (query `estado` de /pago/resultado). */
+export type EstadoCompra = 'APROBADO' | 'RECHAZADO';
+
 /**
  * Payload para confirmar/resolver la transacción con el token de pasarela.
  */

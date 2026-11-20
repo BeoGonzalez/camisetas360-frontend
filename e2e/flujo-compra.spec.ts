@@ -7,9 +7,8 @@ import { products, RECOS_VACIAS } from './support/datos';
  * envío) -> checkout 202 -> seguimiento por polling -> pago -> resultado.
  * Verifica los CONTRATOS que el frontend envía, no solo que las pantallas aparezcan.
  */
-// OJO: la tarjeta de prueba documentada por el backend (4532999988887777) NO pasa Luhn y el
-// formulario la rechaza con razón. Se usa una VISA de prueba válida.
-const PAN = '4532015112830366';
+const TOKEN = 'tok-webpay-e2e';
+const WEBPAY_URL = 'https://webpay.e2e.test/webpayserver/initTransaction';
 const REQUEST_ID = '9b2f6c1e-0d3a-4c55-9e1f-2a7b8c9d0e1f';
 const COSTO_EXPRESS = 6990;
 
@@ -46,6 +45,7 @@ test('compra de punta a punta con seguimiento asíncrono y pago', async ({ page,
   let checkoutHecho = false;
   let consultasTrasCheckout = 0;
   const cuerpos: Record<string, unknown> = {};
+  const webpay: { metodo: string; cuerpo: string }[] = [];
 
   await api.json('**/api/v1/catalog/products', products);
   await api.json(`**/api/v1/catalog/products/${producto.sku}`, producto);
@@ -107,22 +107,20 @@ test('compra de punta a punta con seguimiento asíncrono y pago', async ({ page,
     return json(r, ordenes);
   });
   const monto = producto.price + COSTO_EXPRESS;
-  await api.handle('**/api/v1/pago/iniciar', (r) => {
+  await api.handle('**/api/v1/pago/webpay/iniciar', (r) => {
     cuerpos['pago'] = r.request().postDataJSON();
     return json(
       r,
-      {
-        pagoId: 'pago-1',
-        ordenId: REQUEST_ID,
-        monto,
-        estado: 'INICIADO',
-        token: 'tok-1',
-        urlRedireccion: '',
-        tarjetaUltimos4: '7777',
-        tarjetaMarca: 'VISA',
-      },
+      { pagoId: 'pago-1', ordenId: REQUEST_ID, monto, token: TOKEN, url: WEBPAY_URL },
       201,
     );
+  });
+  // Webpay (Transbank) simulado: recibe el POST con token_ws y, como hace el retorno del backend,
+  // devuelve al cliente a /pago/resultado.
+  await page.route(WEBPAY_URL, (r) => {
+    webpay.push({ metodo: r.request().method(), cuerpo: r.request().postData() ?? '' });
+    const destino = `${new URL(page.url()).origin}/pago/resultado?estado=APROBADO&pagoId=pago-1&ordenId=${REQUEST_ID}`;
+    return r.fulfill({ status: 303, headers: { Location: destino } });
   });
   const pagoAutorizado = {
     id: 'pago-1',
@@ -131,11 +129,10 @@ test('compra de punta a punta con seguimiento asíncrono y pago', async ({ page,
     moneda: 'CLP',
     estado: 'AUTORIZADO',
     codigoAutorizacion: 'AUTH-E2E',
-    tarjetaUltimos4: '7777',
-    tarjetaMarca: 'VISA',
+    tarjetaUltimos4: '6623',
+    tarjetaMarca: 'WEBPAY-VD',
     createdAt: new Date().toISOString(),
   };
-  await api.json('**/api/v1/pago/confirmar', pagoAutorizado);
   await api.json('**/api/v1/pago/pago-1', pagoAutorizado);
 
   // ---- catálogo -> detalle -> agregar ----
@@ -187,22 +184,15 @@ test('compra de punta a punta con seguimiento asíncrono y pago', async ({ page,
   // ---- pago ----
   await page.getByRole('link', { name: 'Pagar ahora' }).click();
   await expect(page).toHaveURL(new RegExp(`/pago/checkout/${REQUEST_ID}$`));
-  await page.locator('#numeroTarjeta').fill(PAN);
-  await page.locator('#nombreTitular').fill('Cliente E2E');
-  await page.locator('#mesVencimiento').selectOption('12');
-  await page.locator('#anioVencimiento').selectOption(String(new Date().getFullYear() + 2));
-  await page.locator('#cvv').fill('123');
+  // La tarjeta se ingresa en Webpay: aquí no hay campos de tarjeta.
+  await expect(page.locator('#numeroTarjeta, #cvv')).toHaveCount(0);
   await page.locator('#btnPagar').click();
 
-  await expect(page).toHaveURL(/\/pago\/resultado\?pagoId=pago-1/);
-  await expect(page.getByText('¡Pago Autorizado!')).toBeVisible();
+  await expect(page).toHaveURL(/\/pago\/resultado\?estado=APROBADO&pagoId=pago-1/);
+  await expect(page.getByRole('heading', { name: 'Su compra ha sido aprobada' })).toBeVisible();
+  await expect(page.getByText('AUTH-E2E')).toBeVisible();
   // Se cobra el total mostrado (ítems + envío) y el requestId del checkout va como ordenId.
-  expect(cuerpos['pago']).toMatchObject({ ordenId: REQUEST_ID, monto, numeroTarjeta: PAN });
-
-  // El PAN viajó solo en el body del POST: nada persistido ni visible.
-  const almacenado = await page.evaluate(
-    () => JSON.stringify({ ...localStorage }) + JSON.stringify({ ...sessionStorage }),
-  );
-  expect(almacenado).not.toContain(PAN);
-  await expect(page.getByText(PAN)).toHaveCount(0);
+  expect(cuerpos['pago']).toEqual({ ordenId: REQUEST_ID, monto });
+  // El navegador fue a Webpay con un POST y solo el token_ws (exigencia de Transbank).
+  expect(webpay).toEqual([{ metodo: 'POST', cuerpo: `token_ws=${TOKEN}` }]);
 });

@@ -70,72 +70,37 @@ test.describe('manejo de errores HTTP', () => {
     await expect(page).toHaveURL(/\/auth\/login\?returnUrl=%2Fpedidos$/);
   });
 
-  test('429 antifraude: esperar 30 minutos, cuenta regresiva, persiste al recargar y se libera', async ({
+  test('400 al iniciar Webpay (orden ya pagada): explica el motivo, sin texto crudo, y permite reintentar', async ({
     page,
     api,
   }) => {
-    // El reloj simulado sigue corriendo en tiempo real (pausarlo congela el arranque de Angular):
-    // las aserciones de la cuenta regresiva toleran los segundos reales que pasan bajo carga.
-    await page.clock.install({ time: new Date('2026-11-13T15:00:00') });
     let intentos = 0;
-    // Contrato real de ms-pagos: ProblemDetail + segundosParaReintentar + Retry-After.
-    await api.handle('**/api/v1/pago/iniciar', (r) => {
+    await api.handle('**/api/v1/pago/webpay/iniciar', (r) => {
       intentos++;
       return r.fulfill({
-        status: 429,
-        headers: { ...CORS, 'Retry-After': '1800' },
+        status: 400,
+        headers: CORS,
         contentType: 'application/problem+json',
         body: JSON.stringify({
-          title: 'TOO_MANY_REQUESTS',
-          codigo: 'BLOQUEADO_FRAUDE',
-          intentosDetectados: 4,
-          ventanaSegundos: 10,
-          segundosParaReintentar: 1800,
-          desbloqueoEn: '2026-11-13T18:30:00Z',
+          title: 'BAD_REQUEST',
+          mensaje: `La orden ${REQ} ya tiene un pago aprobado (PagoServiceImpl.java:88)`,
         }),
       });
     });
 
-    const llenar = async () => {
-      await page.locator('#numeroTarjeta').fill('4051 8856 0044 6623');
-      await page.locator('#nombreTitular').fill('Cliente E2E');
-      await page.locator('#mesVencimiento').selectOption('12');
-      await page.locator('#anioVencimiento').selectOption('2028');
-      await page.locator('#cvv').fill('123');
-    };
-
     await page.goto(`/pago/checkout/${REQ}`);
-    await llenar();
-    await page.locator('#btnPagar').click();
+    const boton = page.locator('#btnPagar');
+    await boton.click();
 
-    const bloqueo = page.getByTestId('bloqueo-pago');
-    await expect(bloqueo).toContainText('Pago bloqueado por seguridad');
-    await expect(bloqueo).toContainText('debes esperar 30 minutos antes de volver a comprar');
-    await expect(bloqueo).toContainText(/Tiempo restante: (30:00|29:[45]\d)/);
-    await expect(bloqueo).toContainText('podrás reintentar a las 15:30');
-    await expect(page.getByRole('alert')).toHaveCount(1);
-    await expect(page.locator('#btnPagar')).toBeDisabled();
-    // PAN y CVV descartados tras enviar.
-    await expect(page.locator('#numeroTarjeta')).toHaveValue('');
-    await expect(page.locator('#cvv')).toHaveValue('');
+    const alerta = page.getByRole('alert');
+    await expect(alerta).toContainText('No pudimos iniciar el pago');
+    await expect(alerta).toContainText('ya tiene un pago aprobado');
+    await expect(page.getByText('PagoServiceImpl')).toHaveCount(0); // nunca el detalle crudo
+    await expect(page).toHaveURL(new RegExp(`/pago/checkout/${REQ}$`)); // no se fue a Webpay
+    await expect(boton).toBeEnabled();
+    await expect(boton).toContainText('con Webpay');
 
-    // Pasan 10 minutos y se recarga: el bloqueo sigue con el tiempo correcto.
-    await page.clock.fastForward('10:00');
-    await page.reload();
-    // ~20:00 (no 30:00: no se reinició; no ausente: no se perdió con la recarga).
-    await expect(page.getByTestId('bloqueo-pago')).toContainText(
-      /Tiempo restante: (20:00|19:[45]\d)/,
-    );
-    await llenar();
-    await expect(page.locator('#btnPagar')).toBeDisabled();
-    const guardado = await page.evaluate(() => localStorage.getItem('c360_bloqueos_pago') ?? '');
-    expect(guardado).toContain(REQ);
-    expect(guardado).not.toContain('4051');
-
-    // A los 30 minutos se libera y se puede volver a pagar.
-    await page.clock.fastForward('20:01');
-    await expect(page.getByTestId('bloqueo-pago')).toHaveCount(0);
-    await expect(page.locator('#btnPagar')).toBeEnabled();
-    expect(intentos).toBe(1);
+    await boton.click();
+    await expect.poll(() => intentos).toBe(2);
   });
 });
