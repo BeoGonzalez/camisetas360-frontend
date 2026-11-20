@@ -141,7 +141,7 @@ import { ApiErrorComponent } from '../../shared/components/api-error/api-error.c
                 <legend class="sr-only">Método de envío</legend>
                 @for (m of metodos; track m.value) {
                   <label
-                    class="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 p-3 text-sm has-[:checked]:border-blue-600 has-[:checked]:bg-blue-50"
+                    class="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 p-3 text-sm has-checked:border-blue-600 has-checked:bg-blue-50"
                   >
                     <input type="radio" formControlName="metodo" [value]="m.value" />
                     <span
