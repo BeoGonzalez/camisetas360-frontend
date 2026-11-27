@@ -116,6 +116,134 @@ describe('CognitoAuthService', () => {
     expect(localStorage.getItem('c360_cognito_session')).toBeNull();
   });
 
+  describe('respuesta real de la Lambda (solo tokens) y renovación', () => {
+    const url = (k: 'cognitoLogin' | 'cognitoRegister' | 'cognitoRefresh') =>
+      `${environment.apiGateway}${environment.endpoints[k]}`;
+    // UTF-8 (claims con tildes), como un JWT real
+    const b64 = (o: unknown) =>
+      btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(o))))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+    const jwt = (claims: Record<string, unknown>) => `h.${b64(claims)}.s`;
+    const ahora = () => Math.floor(Date.now() / 1000);
+    const idToken = jwt({
+      email: 'ana@camisetas360.com',
+      name: 'Ana Pérez',
+      sub: 'sub-ana',
+      'cognito:username': 'ana@camisetas360.com',
+      'cognito:groups': ['CUSTOMER'],
+    });
+    /** Lo que devuelve de verdad la Lambda: sin `user`. */
+    /** `refreshToken` null = la respuesta no trae refresh token. */
+    const tokens = (exp: number, refreshToken: string | null = 'rt-1') => ({
+      accessToken: jwt({ exp, token_use: 'access' }),
+      idToken,
+      refreshToken: refreshToken ?? undefined,
+      expiresIn: 3600,
+      tokenType: 'Bearer',
+    });
+    const loginCon = (exp: number) => {
+      service.login('ana@camisetas360.com', 'Password123!').subscribe();
+      httpMock.expectOne(url('cognitoLogin')).flush(tokens(exp));
+    };
+
+    it('login sin `user` en la respuesta: el usuario sale del ID token y se guarda el refresh token', () => {
+      loginCon(ahora() + 3600);
+      expect(service.currentUser()).toEqual({
+        username: 'ana@camisetas360.com',
+        email: 'ana@camisetas360.com',
+        name: 'Ana Pérez',
+        sub: 'sub-ana',
+        roles: ['CUSTOMER'],
+      });
+      expect(service.puedeRenovar()).toBe(true);
+      expect(localStorage.getItem('c360_cognito_session')).toContain('rt-1');
+    });
+
+    it('register sin tokens (la Lambda solo confirma el alta) inicia sesión con las mismas credenciales', () => {
+      service.register('ana@camisetas360.com', 'Password123!', 'Ana').subscribe();
+      httpMock
+        .expectOne(url('cognitoRegister'))
+        .flush({ userSub: 'sub-ana', email: 'ana@camisetas360.com', confirmed: true });
+      const login = httpMock.expectOne(url('cognitoLogin'));
+      expect(login.request.body).toEqual({
+        email: 'ana@camisetas360.com',
+        password: 'Password123!',
+      });
+      login.flush(tokens(ahora() + 3600));
+      expect(service.isLoggedIn()).toBe(true);
+      expect(service.currentUser()?.email).toBe('ana@camisetas360.com');
+    });
+
+    it('tokenPorVencer: true con menos de 1 min de vida, false con margen', () => {
+      loginCon(ahora() + 30);
+      expect(service.tokenPorVencer()).toBe(true);
+      expect(service.tokenVencido()).toBe(false);
+      service.logout();
+      loginCon(ahora() + 600);
+      expect(service.tokenPorVencer()).toBe(false);
+    });
+
+    it('renovar: POST /refresh con el refresh token, actualiza el access token y conserva el refresh', () => {
+      loginCon(ahora() - 10);
+      let listo = false;
+      service.renovar().subscribe(() => (listo = true));
+      const req = httpMock.expectOne(url('cognitoRefresh'));
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({ refreshToken: 'rt-1' });
+      // REFRESH_TOKEN_AUTH no siempre devuelve un refresh token nuevo
+      req.flush(tokens(ahora() + 3600, null));
+      expect(listo).toBe(true);
+      expect(service.tokenVencido()).toBe(false);
+      expect(service.puedeRenovar()).toBe(true);
+      expect(localStorage.getItem('c360_cognito_session')).toContain('rt-1');
+    });
+
+    it('renovaciones simultáneas comparten una sola llamada a la Lambda', () => {
+      loginCon(ahora() - 10);
+      let n = 0;
+      service.renovar().subscribe(() => n++);
+      service.renovar().subscribe(() => n++);
+      httpMock.expectOne(url('cognitoRefresh')).flush(tokens(ahora() + 3600));
+      expect(n).toBe(2);
+    });
+
+    it('refresh token rechazado (400) cierra la sesión; un error de red la conserva', () => {
+      loginCon(ahora() - 10);
+      service.renovar().subscribe({ error: () => undefined });
+      httpMock.expectOne(url('cognitoRefresh')).flush({}, { status: 0, statusText: 'red' });
+      expect(service.isLoggedIn()).toBe(true);
+
+      service.renovar().subscribe({ error: () => undefined });
+      httpMock.expectOne(url('cognitoRefresh')).flush({}, { status: 400, statusText: 'Bad' });
+      expect(service.isLoggedIn()).toBe(false);
+      expect(localStorage.getItem('c360_cognito_session')).toBeNull();
+    });
+
+    it('sin refresh token, renovar falla sin llamar a la Lambda', () => {
+      service.login('ana@camisetas360.com', 'Password123!').subscribe();
+      httpMock.expectOne(url('cognitoLogin')).flush(tokens(ahora() - 10, null));
+      let error: unknown;
+      service.renovar().subscribe({ error: (e) => (error = e) });
+      expect(error).toBeTruthy();
+      expect(service.puedeRenovar()).toBe(false);
+    });
+
+    it('cerrarSesion (formulario): revoca el refresh token, borra la sesión y no pide redirección', () => {
+      loginCon(ahora() + 3600);
+      const destino = service.cerrarSesion();
+      const revoke = httpMock.expectOne(`${environment.cognito.domain}/oauth2/revoke`);
+      expect(revoke.request.body).toBe(
+        `token=rt-1&client_id=${encodeURIComponent(environment.cognito.clientId)}`,
+      );
+      revoke.flush({});
+      expect(destino).toBeNull();
+      expect(service.isLoggedIn()).toBe(false);
+      expect(localStorage.getItem('c360_cognito_session')).toBeNull();
+    });
+  });
+
   describe('Hosted UI (authorization code + PKCE)', () => {
     const c = environment.cognito;
     const b64url = (bytes: Uint8Array) =>
@@ -183,6 +311,24 @@ describe('CognitoAuthService', () => {
         roles: ['ADMIN'],
       });
       expect(sessionStorage.getItem('c360_cognito_hosted_ui')).toBeNull();
+    });
+
+    it('guarda el refresh token del Hosted UI y al cerrar sesión pide /logout de Cognito', async () => {
+      const url = new URL(await service.urlHostedUi('/catalog'));
+      service.completarHostedUi('codigo-2', url.searchParams.get('state')).subscribe();
+      httpMock.expectOne(`${c.domain}/oauth2/token`).flush({
+        access_token: 'acceso',
+        id_token: jwt({ sub: 's-2', email: 'ana@x.com' }),
+        refresh_token: 'rt-hosted',
+      });
+      expect(service.puedeRenovar()).toBe(true);
+
+      const destino = new URL(service.cerrarSesion()!);
+      httpMock.expectOne(`${c.domain}/oauth2/revoke`).flush({});
+      expect(`${destino.origin}${destino.pathname}`).toBe(`${c.domain}/logout`);
+      expect(destino.searchParams.get('client_id')).toBe(c.clientId);
+      expect(destino.searchParams.get('logout_uri')).toBe(c.logoutUri);
+      expect(service.isLoggedIn()).toBe(false);
     });
 
     it('rechaza un state distinto (código inyectado) sin llamar a Cognito', async () => {

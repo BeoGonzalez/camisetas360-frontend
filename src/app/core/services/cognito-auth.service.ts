@@ -1,6 +1,16 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
-import { Observable, tap, catchError, throwError, map } from 'rxjs';
+import {
+  Observable,
+  tap,
+  catchError,
+  throwError,
+  map,
+  switchMap,
+  of,
+  finalize,
+  shareReplay,
+} from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 export interface CognitoUser {
@@ -11,17 +21,26 @@ export interface CognitoUser {
   roles: string[];
 }
 
+/**
+ * Respuesta de la Lambda (login/refresh): solo tokens. `user` es opcional porque la Lambda no lo
+ * envía; si falta, el usuario se arma desde el ID token.
+ */
 export interface CognitoAuthResponse {
-  message: string;
+  message?: string;
   accessToken: string;
   idToken: string;
-  refreshToken: string;
-  tokenType: string;
-  expiresIn: number;
-  user: CognitoUser;
+  refreshToken?: string;
+  tokenType?: string;
+  expiresIn?: number;
+  user?: CognitoUser;
 }
 
+/** De dónde salió la sesión: el Hosted UI deja además una cookie en el dominio de Cognito. */
+type OrigenSesion = 'formulario' | 'hosted-ui';
+
 const STORAGE_KEY = 'c360_cognito_session';
+/** Se renueva el access token cuando le queda menos que esto (y ante cualquier 401). */
+const MARGEN_RENOVACION_MS = 60_000;
 /** Verificador PKCE, state y destino del login con Hosted UI (solo dura la pestaña). */
 const HOSTED_UI_KEY = 'c360_cognito_hosted_ui';
 const ROLES_CONOCIDOS = ['CUSTOMER', 'CATALOG_MANAGER', 'ADMIN'];
@@ -35,6 +54,7 @@ interface HostedUiPendiente {
 interface TokenResponse {
   access_token: string;
   id_token: string;
+  refresh_token?: string;
 }
 
 function base64Url(bytes: Uint8Array): string {
@@ -69,10 +89,18 @@ export class CognitoAuthService {
   private readonly http = inject(HttpClient);
   private readonly loginUrl = `${environment.apiGateway}${environment.endpoints.cognitoLogin}`;
   private readonly registerUrl = `${environment.apiGateway}${environment.endpoints.cognitoRegister}`;
+  private readonly refreshUrl = `${environment.apiGateway}${environment.endpoints.cognitoRefresh}`;
 
   private readonly _currentUser = signal<CognitoUser | null>(null);
   private readonly _accessToken = signal<string | null>(null);
   private readonly _idToken = signal<string | null>(null);
+  private readonly _refreshToken = signal<string | null>(null);
+  private origen: OrigenSesion = 'formulario';
+  /** Renovación en curso: peticiones simultáneas comparten una sola llamada a la Lambda. */
+  private renovacion$: Observable<void> | null = null;
+
+  /** ¿Hay refresh token para renovar la sesión sin pedir la contraseña? */
+  readonly puedeRenovar = computed<boolean>(() => !!this._refreshToken());
 
   /** Indica si hay un usuario autenticado mediante Cognito */
   readonly isLoggedIn = computed<boolean>(() => this._currentUser() !== null);
@@ -117,14 +145,43 @@ export class CognitoAuthService {
    * volver a iniciar sesión; la validez real la decide el backend.
    */
   tokenVencido(ahoraMs: number = Date.now()): boolean {
+    return this.tokenPorVencer(0, ahoraMs);
+  }
+
+  /** ¿Al access token le quedan menos de `margenMs` (o no hay token legible)? */
+  tokenPorVencer(margenMs: number = MARGEN_RENOVACION_MS, ahoraMs: number = Date.now()): boolean {
     const token = this._accessToken();
     if (!token) return true;
     try {
       const exp = claimsDeJwt(token)['exp'];
-      return typeof exp !== 'number' || exp * 1000 <= ahoraMs;
+      return typeof exp !== 'number' || exp * 1000 - margenMs <= ahoraMs;
     } catch {
       return true;
     }
+  }
+
+  /**
+   * Renueva el access token con el refresh token (Lambda, REFRESH_TOKEN_AUTH). Si varias peticiones
+   * la piden a la vez, comparten la misma llamada. Si Cognito rechaza el refresh token (vencido o
+   * revocado), la sesión se cierra; un error de red la conserva para reintentar después.
+   */
+  renovar(): Observable<void> {
+    const refreshToken = this._refreshToken();
+    if (!refreshToken) return throwError(() => new Error('La sesión no se puede renovar.'));
+    if (!this.renovacion$) {
+      this.renovacion$ = this.http
+        .post<CognitoAuthResponse>(this.refreshUrl, { refreshToken })
+        .pipe(
+          map((r) => this.setSession({ ...r, refreshToken: r.refreshToken || refreshToken })),
+          catchError((e: unknown) => {
+            if (e instanceof HttpErrorResponse && e.status >= 400 && e.status < 500) this.logout();
+            return throwError(() => e);
+          }),
+          finalize(() => (this.renovacion$ = null)),
+          shareReplay({ bufferSize: 1, refCount: false }),
+        );
+    }
+    return this.renovacion$;
   }
 
   /**
@@ -138,7 +195,8 @@ export class CognitoAuthService {
   }
 
   /**
-   * Registra y confirma un nuevo usuario en AWS Cognito vía Lambda.
+   * Registra y confirma un nuevo usuario en AWS Cognito vía Lambda. La Lambda responde el alta
+   * (userSub, email, confirmed) sin tokens: en ese caso se inicia sesión con las mismas credenciales.
    */
   register(email: string, password: string, name?: string): Observable<CognitoAuthResponse> {
     return this.http
@@ -149,8 +207,14 @@ export class CognitoAuthService {
         action: 'register',
       })
       .pipe(
-        tap((response) => this.setSession(response)),
         catchError(this.handleError),
+        switchMap((response) => {
+          if (response?.accessToken) {
+            this.setSession(response);
+            return of(response);
+          }
+          return this.login(email, password);
+        }),
       );
   }
 
@@ -204,15 +268,15 @@ export class CognitoAuthService {
       })
       .pipe(
         map((t) => {
-          this.setSession({
-            message: '',
-            accessToken: t.access_token,
-            idToken: t.id_token,
-            refreshToken: '',
-            tokenType: 'Bearer',
-            expiresIn: 0,
-            user: usuarioDeIdToken(t.id_token),
-          });
+          this.setSession(
+            {
+              accessToken: t.access_token,
+              idToken: t.id_token,
+              refreshToken: t.refresh_token,
+              user: usuarioDeIdToken(t.id_token),
+            },
+            'hosted-ui',
+          );
           return pendiente.returnUrl;
         }),
         catchError(() =>
@@ -232,12 +296,14 @@ export class CognitoAuthService {
   }
 
   /**
-   * Cierra la sesión activa de Cognito.
+   * Borra la sesión local de Cognito (tokens en memoria y en localStorage). No navega.
    */
   logout(): void {
     this._currentUser.set(null);
     this._accessToken.set(null);
     this._idToken.set(null);
+    this._refreshToken.set(null);
+    this.origen = 'formulario';
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {
@@ -245,18 +311,52 @@ export class CognitoAuthService {
     }
   }
 
-  private setSession(response: CognitoAuthResponse): void {
-    this._currentUser.set(response.user);
+  /**
+   * Cierre de sesión pedido por el usuario: revoca el refresh token en Cognito (para que no sirva
+   * aunque alguien lo haya copiado), borra la sesión local y, si entró por el Hosted UI, devuelve la
+   * URL de /logout del dominio de Cognito para borrar también su cookie (si no, el próximo "entrar
+   * con Cognito" volvería a abrir la misma cuenta sin pedir credenciales). Null = ir al login.
+   */
+  cerrarSesion(): string | null {
+    const refreshToken = this._refreshToken();
+    const urlLogout = this.origen === 'hosted-ui' ? this.urlLogoutHostedUi() : null;
+    if (refreshToken) {
+      const c = environment.cognito;
+      const body = new HttpParams({ fromObject: { token: refreshToken, client_id: c.clientId } });
+      this.http
+        .post(`${c.domain}/oauth2/revoke`, body.toString(), {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        })
+        .subscribe({ error: () => undefined }); // sin conexión: el token vence solo
+    }
+    this.logout();
+    return urlLogout;
+  }
+
+  private urlLogoutHostedUi(): string {
+    const c = environment.cognito;
+    const params = new URLSearchParams({ client_id: c.clientId, logout_uri: c.logoutUri });
+    return `${c.domain}/logout?${params}`;
+  }
+
+  private setSession(response: CognitoAuthResponse, origen?: OrigenSesion): void {
+    // La Lambda no envía `user`: se toma del ID token (claims; la firma la valida el backend).
+    const user = response.user ?? usuarioDeIdToken(response.idToken);
+    if (origen) this.origen = origen;
+    this._currentUser.set(user);
     this._accessToken.set(response.accessToken);
     this._idToken.set(response.idToken);
+    this._refreshToken.set(response.refreshToken || null);
 
     try {
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
-          user: response.user,
+          user,
           accessToken: response.accessToken,
           idToken: response.idToken,
+          refreshToken: response.refreshToken || null,
+          origen: this.origen,
         }),
       );
     } catch {
@@ -273,6 +373,8 @@ export class CognitoAuthService {
           this._currentUser.set(parsed.user);
           this._accessToken.set(parsed.accessToken);
           this._idToken.set(parsed.idToken);
+          this._refreshToken.set(parsed.refreshToken || null);
+          this.origen = parsed.origen === 'hosted-ui' ? 'hosted-ui' : 'formulario';
         }
       }
     } catch {

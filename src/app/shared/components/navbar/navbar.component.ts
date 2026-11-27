@@ -156,9 +156,20 @@ const LINK_ACTIVO = '!text-ink underline';
             <button
               type="button"
               (click)="authService.logout()"
-              class="album-caps hidden px-2 py-2 text-[11px] text-slate-600 hover:text-ink sm:block"
+              [title]="'Cerrar la sesión de ' + authService.activeUser()"
+              class="album-caps hidden items-center gap-1.5 border border-ink px-2.5 py-1.5 text-[11px] text-ink transition-colors hover:bg-ink hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 sm:inline-flex"
             >
-              Salir
+              <svg
+                class="h-3.5 w-3.5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="1.8"
+                aria-hidden="true"
+              >
+                <path stroke-linecap="square" d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10" />
+              </svg>
+              Cerrar sesión
             </button>
           } @else {
             <a
@@ -243,9 +254,9 @@ const LINK_ACTIVO = '!text-ink underline';
                 <button
                   type="button"
                   (click)="authService.logout()"
-                  class="album-caps text-[11px] text-ink underline underline-offset-4"
+                  class="album-caps border border-ink px-2.5 py-1.5 text-[11px] text-ink"
                 >
-                  Salir
+                  Cerrar sesión
                 </button>
               </p>
             } @else {

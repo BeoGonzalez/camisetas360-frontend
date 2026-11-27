@@ -5,6 +5,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { Router } from '@angular/router';
 import { MsalService } from '@azure/msal-angular';
 import { InteractionRequiredAuthError } from '@azure/msal-browser';
+import { of, throwError } from 'rxjs';
 import { resetReauthState, unauthorizedInterceptor } from './unauthorized.interceptor';
 import { CognitoAuthService } from '../services/cognito-auth.service';
 import { environment } from '../../../environments/environment';
@@ -15,9 +16,12 @@ describe('unauthorizedInterceptor', () => {
   let account: object | null;
   let cognitoLogged: boolean;
   let cognitoVencido: boolean;
+  let cognitoRenovable: boolean;
   const cognitoMock = {
     isLoggedIn: () => cognitoLogged,
     tokenVencido: () => cognitoVencido,
+    puedeRenovar: () => cognitoRenovable,
+    renovar: vi.fn(() => of(undefined)),
     logout: vi.fn(() => (cognitoLogged = false)),
   };
   const acquireTokenRedirect = vi.fn(() => Promise.resolve());
@@ -33,7 +37,10 @@ describe('unauthorizedInterceptor', () => {
     account = null;
     cognitoLogged = false;
     cognitoVencido = false;
+    cognitoRenovable = false;
     cognitoMock.logout.mockClear();
+    cognitoMock.renovar.mockReset();
+    cognitoMock.renovar.mockReturnValue(of(undefined));
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(withInterceptors([unauthorizedInterceptor])),
@@ -142,6 +149,46 @@ describe('unauthorizedInterceptor', () => {
     expect(cognitoMock.logout).toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith(['/auth/login'], {
       queryParams: { returnUrl: '/carrito' },
+    });
+  });
+
+  describe('sesión Cognito con refresh token', () => {
+    beforeEach(() => {
+      cognitoLogged = true;
+      cognitoRenovable = true;
+    });
+
+    it('401 -> renueva con el refresh token y reintenta una vez, sin cerrar la sesión', () => {
+      let body: unknown;
+      http.get(url).subscribe((b) => (body = b));
+      flush401();
+      expect(cognitoMock.renovar).toHaveBeenCalledTimes(1);
+      ctrl.expectOne(url).flush(['ok']);
+      expect(body).toEqual(['ok']);
+      expect(cognitoMock.logout).not.toHaveBeenCalled();
+      expect(navigate).not.toHaveBeenCalled();
+      expect(acquireTokenSilent).not.toHaveBeenCalled();
+    });
+
+    it('si la renovación falla -> cierra la sesión y va al login', () => {
+      cognitoMock.renovar.mockReturnValue(throwError(() => new Error('rechazado')));
+      let error: unknown;
+      http.get(url).subscribe({ error: (e) => (error = e) });
+      flush401();
+      expect(error).toBeTruthy();
+      expect(cognitoMock.logout).toHaveBeenCalled();
+      expect(navigate).toHaveBeenCalledWith(['/auth/login'], {
+        queryParams: { returnUrl: '/carrito' },
+      });
+    });
+
+    it('si el reintento vuelve a dar 401 -> login, sin renovar otra vez', () => {
+      http.get(url).subscribe({ error: () => undefined });
+      flush401();
+      flush401();
+      expect(cognitoMock.renovar).toHaveBeenCalledTimes(1);
+      expect(cognitoMock.logout).toHaveBeenCalled();
+      expect(navigate).toHaveBeenCalled();
     });
   });
 
