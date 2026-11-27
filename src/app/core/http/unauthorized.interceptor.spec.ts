@@ -122,19 +122,19 @@ describe('unauthorizedInterceptor', () => {
     expect(cognitoMock.logout).toHaveBeenCalled();
   });
 
-  it('401 de un servicio solo-Entra con sesión Cognito vigente NO cierra la sesión', () => {
+  it('401 de cualquier servicio con sesión Cognito vigente -> login (todos aceptan Cognito)', () => {
     cognitoLogged = true;
     const recos = `${environment.apiGateway}/api/v1/recomendaciones`;
     let error: unknown;
     http.get(recos).subscribe({ error: (e) => (error = e) });
     ctrl.expectOne(recos).flush({}, { status: 401, statusText: 'Unauthorized' });
-    expect(error).toBeTruthy(); // la pantalla recibe el error
-    expect(cognitoMock.logout).not.toHaveBeenCalled();
-    expect(navigate).not.toHaveBeenCalled();
+    expect(error).toBeTruthy(); // la pantalla recibe el error igual
+    expect(cognitoMock.logout).toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalled();
     expect(acquireTokenSilent).not.toHaveBeenCalled();
   });
 
-  it('401 con sesión Cognito vencida -> login aunque el servicio sea solo-Entra', () => {
+  it('401 con sesión Cognito vencida -> login', () => {
     cognitoLogged = true;
     cognitoVencido = true;
     http.get(url).subscribe({ error: () => undefined });
