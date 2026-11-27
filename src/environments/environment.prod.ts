@@ -27,6 +27,8 @@ export const environment = {
     domain: 'https://camisetas360-471112640065.auth.us-east-1.amazoncognito.com',
     redirectUri: `${ORIGIN}/auth/cognito/callback`,
     logoutUri: `${ORIGIN}/`,
-    scopes: ['openid', 'email', 'profile'],
+    // aws.cognito.signin.user.admin: carrito lee el email con GetUser usando este access token
+    // (sin ese scope, el checkout responde 422). Los tokens del formulario (Lambda) ya lo traen.
+    scopes: ['openid', 'email', 'profile', 'aws.cognito.signin.user.admin'],
   },
 };

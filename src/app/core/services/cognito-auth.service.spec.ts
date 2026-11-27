@@ -134,7 +134,10 @@ describe('CognitoAuthService', () => {
       expect(`${url.origin}${url.pathname}`).toBe(`${c.domain}/oauth2/authorize`);
       expect(url.searchParams.get('client_id')).toBe(c.clientId);
       expect(url.searchParams.get('redirect_uri')).toBe(c.redirectUri);
-      expect(url.searchParams.get('scope')).toBe('openid email profile');
+      // Sin aws.cognito.signin.user.admin, carrito no puede leer el email (GetUser) y el checkout da 422.
+      expect(url.searchParams.get('scope')).toBe(
+        'openid email profile aws.cognito.signin.user.admin',
+      );
       expect(url.searchParams.get('code_challenge_method')).toBe('S256');
       const pendiente = JSON.parse(sessionStorage.getItem('c360_cognito_hosted_ui')!);
       expect(url.searchParams.get('state')).toBe(pendiente.state);
