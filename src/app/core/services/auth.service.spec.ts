@@ -129,9 +129,10 @@ describe('AuthService', () => {
     function crearConEspias() {
       const auth = crear();
       const cognitoSvc = TestBed.inject(CognitoAuthService) as unknown as {
-        logout: ReturnType<typeof vi.fn>;
+        cerrarSesion: ReturnType<typeof vi.fn>;
       };
-      cognitoSvc.logout = vi.fn();
+      // null = sesión del formulario (sin cookie del Hosted UI que cerrar): se va al login
+      cognitoSvc.cerrarSesion = vi.fn(() => null);
       const msal = TestBed.inject(MsalService) as unknown as {
         logoutRedirect: ReturnType<typeof vi.fn>;
       };
@@ -146,7 +147,7 @@ describe('AuthService', () => {
       cognito = { logged: true, roles: ['CUSTOMER'] };
       const { auth, cognitoSvc, msal, reset, navigate } = crearConEspias();
       auth.logout();
-      expect(cognitoSvc.logout).toHaveBeenCalled();
+      expect(cognitoSvc.cerrarSesion).toHaveBeenCalled();
       expect(reset).toHaveBeenCalled();
       expect(navigate).toHaveBeenCalledWith(['/auth/login']);
       expect(msal.logoutRedirect).not.toHaveBeenCalled();

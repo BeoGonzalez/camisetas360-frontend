@@ -23,11 +23,11 @@ export function resetReauthState(): void {
  * 1. Sesión Entra: se fuerza la renovación silenciosa del token del scope de esa URL
  *    (`acquireTokenSilent({ forceRefresh: true })`) y se reintenta la petición UNA vez.
  * 2. Si la renovación falla (p. ej. InteractionRequiredAuthError) o el reintento vuelve a dar
- *    401: `acquireTokenRedirect` (Entra) o `/auth/login?returnUrl` (Cognito o sin sesión;
- *    la sesión Cognito vía Lambda no tiene renovación).
+ *    401: `acquireTokenRedirect` (Entra) o `/auth/login?returnUrl` (Cognito o sin sesión).
  *
  * Sesión Cognito: todos los servicios (y el authorizer del API Gateway) aceptan sus access tokens,
- * así que cualquier 401 significa que la sesión ya no sirve: se descarta y se vuelve al login.
+ * así que un 401 significa que el token venció o fue revocado: se renueva con el refresh token y se
+ * reintenta UNA vez; si no hay refresh token o Cognito lo rechaza, se descarta y se vuelve al login.
  *
  * El error se propaga igualmente para que la pantalla deje su estado de carga.
  */
@@ -61,8 +61,28 @@ export const unauthorizedInterceptor: HttpInterceptorFn = (req, next) => {
 
       const scopes = scopesForUrl(req.url);
       if (cognito.isLoggedIn()) {
-        reautenticar(scopes);
-        return throwError(() => err);
+        // Una vez: refresh token -> access token nuevo y se reintenta (AuthInterceptor pone el
+        // token renovado). Sin refresh token, o si falla o el reintento vuelve a dar 401: login.
+        if (req.context.get(REINTENTADA) || !cognito.puedeRenovar()) {
+          reautenticar(scopes);
+          return throwError(() => err);
+        }
+        return cognito.renovar().pipe(
+          catchError(() => {
+            reautenticar(scopes);
+            return throwError(() => err);
+          }),
+          switchMap(() =>
+            next(req.clone({ context: req.context.set(REINTENTADA, true) })).pipe(
+              catchError((retryErr: unknown) => {
+                if (retryErr instanceof HttpErrorResponse && retryErr.status === 401) {
+                  reautenticar(scopes);
+                }
+                return throwError(() => retryErr);
+              }),
+            ),
+          ),
+        );
       }
       const account = cognito.isLoggedIn() ? null : msal.instance.getActiveAccount();
       if (req.context.get(REINTENTADA) || !account || !scopes) {

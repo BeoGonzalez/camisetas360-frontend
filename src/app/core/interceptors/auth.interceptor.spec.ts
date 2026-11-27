@@ -10,14 +10,35 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { AuthInterceptor } from './auth.interceptor';
 import { CognitoAuthService } from '../services/cognito-auth.service';
 import { environment } from '../../../environments/environment';
+import { Observable, of, throwError } from 'rxjs';
 
 describe('AuthInterceptor (Bearer de la sesión Cognito)', () => {
   let http: HttpClient;
   let ctrl: HttpTestingController;
-  let sesion: { logged: boolean; access: string | null; id: string | null };
+  let sesion: {
+    logged: boolean;
+    access: string | null;
+    id: string | null;
+    porVencer: boolean;
+    renovable: boolean;
+    renovar: () => Observable<void>;
+    renovaciones: number;
+  };
 
   beforeEach(() => {
-    sesion = { logged: true, access: 'access-tok', id: 'id-tok' };
+    sesion = {
+      logged: true,
+      access: 'access-tok',
+      id: 'id-tok',
+      porVencer: false,
+      renovable: true,
+      renovaciones: 0,
+      renovar: () => {
+        sesion.renovaciones++;
+        sesion.access = 'access-renovado';
+        return of(undefined);
+      },
+    };
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(withInterceptorsFromDi()),
@@ -29,6 +50,9 @@ describe('AuthInterceptor (Bearer de la sesión Cognito)', () => {
             isLoggedIn: () => sesion.logged,
             accessToken: () => sesion.access,
             idToken: () => sesion.id,
+            tokenPorVencer: () => sesion.porVencer,
+            puedeRenovar: () => sesion.renovable,
+            renovar: () => sesion.renovar(),
           },
         },
       ],
@@ -75,5 +99,36 @@ describe('AuthInterceptor (Bearer de la sesión Cognito)', () => {
     const req = ctrl.expectOne(url);
     expect(req.request.headers.get('Authorization')).toBe('Bearer otro');
     req.flush({});
+  });
+
+  describe('renovación antes de enviar', () => {
+    const api = `${environment.apiGateway}/api/v1/orders`;
+
+    it('token por vencer -> renueva primero y envía el token nuevo', () => {
+      sesion.porVencer = true;
+      expect(authDe(api)).toBe('Bearer access-renovado');
+      expect(sesion.renovaciones).toBe(1);
+    });
+
+    it('token vigente -> no renueva', () => {
+      expect(authDe(api)).toBe('Bearer access-tok');
+      expect(sesion.renovaciones).toBe(0);
+    });
+
+    it('si la renovación falla, envía igual con el token que hay (el 401 lo maneja otro interceptor)', () => {
+      sesion.porVencer = true;
+      sesion.renovar = () => throwError(() => new Error('red'));
+      expect(authDe(api)).toBe('Bearer access-tok');
+    });
+
+    it('las rutas de la Lambda de login no llevan Bearer ni disparan la renovación', () => {
+      sesion.porVencer = true;
+      const refresh = `${environment.apiGateway}${environment.endpoints.cognitoRefresh}`;
+      http.post(refresh, {}).subscribe();
+      const req = ctrl.expectOne(refresh);
+      expect(req.request.headers.get('Authorization')).toBeNull();
+      req.flush({});
+      expect(sesion.renovaciones).toBe(0);
+    });
   });
 });

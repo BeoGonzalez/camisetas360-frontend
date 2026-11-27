@@ -151,19 +151,20 @@ export class AuthService {
   /**
    * Cierra la sesión activa y deja el navegador listo para que otra persona entre: borra el
    * perfil y el espejo del carrito (el carrito real queda en el backend, asociado a su dueño).
-   * Entra ID vuelve solo vía logoutRedirect; con Cognito se va al login.
+   * Entra ID vuelve solo vía logoutRedirect. Cognito revoca el refresh token; si la sesión vino del
+   * Hosted UI se cierra también allí (vuelve a la portada), si no se va al login.
    */
   logout(): void {
     this.profile.set(null);
     this.profile$ = null;
     this.cart.reset();
     const conEntra = !!this.msalService.instance.getActiveAccount();
-    if (this.cognitoAuth.isLoggedIn()) {
-      this.cognitoAuth.logout();
-    }
+    const urlLogoutCognito = this.cognitoAuth.isLoggedIn() ? this.cognitoAuth.cerrarSesion() : null;
     this.clearTokens();
     if (conEntra) {
       this.msalService.logoutRedirect().subscribe();
+    } else if (urlLogoutCognito) {
+      window.location.assign(urlLogoutCognito);
     } else {
       this.router.navigate(['/auth/login']);
     }

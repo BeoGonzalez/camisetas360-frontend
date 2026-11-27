@@ -124,7 +124,7 @@ test.describe('separación de roles', () => {
 
     await page.goto('/perfil');
     await expect(page.getByText('e2e@camisetas360.test').first()).toBeVisible();
-    await page.getByRole('button', { name: 'Cerrar sesión' }).click();
+    await page.getByRole('main').getByRole('button', { name: 'Cerrar sesión' }).click();
 
     await expect(page).toHaveURL(/\/auth\/login$/);
     await expect(page.getByRole('tab', { name: 'Iniciar sesión' })).toBeVisible();
@@ -136,7 +136,7 @@ test.describe('separación de roles', () => {
     await expect(nav.getByRole('link', { name: 'Iniciar Sesión' })).toBeVisible();
     await expect(nav.getByRole('link', { name: 'Mi perfil' })).toHaveCount(0);
     await expect(nav.getByRole('link', { name: /Carrito/ })).toHaveCount(0);
-    await expect(nav.getByRole('button', { name: 'Salir' })).toHaveCount(0);
+    await expect(nav.getByRole('button', { name: 'Cerrar sesión' })).toHaveCount(0);
   });
 
   test('sin sesión: una ruta protegida redirige al login conservando returnUrl', async ({

@@ -29,6 +29,7 @@ export const endpoints = {
   analytics: '/api/v1/analytics',
   cognitoLogin: '/api/v1/auth/cognito/login',
   cognitoRegister: '/api/v1/auth/cognito/register',
+  cognitoRefresh: '/api/v1/auth/cognito/refresh',
   pago: '/api/v1/pago',
 };
 
