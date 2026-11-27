@@ -22,11 +22,11 @@ export const environment = {
 
   cognito: {
     region: 'us-east-1',
-    userPoolId: 'us-east-1_jZ9MPGJGI',
-    clientId: '7svd55500qfk2qu3bis91urtqv',
-    domain: 'https://us-east-1jz9mpgjgi.auth.us-east-1.amazoncognito.com',
-    redirectUri: 'https://bbsgv4efrd.execute-api.us-east-1.amazonaws.com/auth/cognito/callback',
-    logoutUri: 'https://bbsgv4efrd.execute-api.us-east-1.amazonaws.com/',
+    userPoolId: 'us-east-1_SmfKHFzMK',
+    clientId: '12dth99ppcslnukovavrpvg6pb',
+    domain: 'https://camisetas360-471112640065.auth.us-east-1.amazoncognito.com',
+    redirectUri: `${ORIGIN}/auth/cognito/callback`,
+    logoutUri: `${ORIGIN}/`,
     scopes: ['openid', 'email', 'profile'],
   },
 };
