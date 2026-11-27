@@ -270,6 +270,12 @@ jobs:
       # servicio Fargate) y deja intacto lo que ya está (por ejemplo, lo
       # creado por Terraform). Red: VPC por defecto con IP pública, salvo
       # que se definan las variables ECS_SUBNETS / ECS_SECURITY_GROUP.
+      #
+      # Si existe el NLB interno del backend (NLB_NAME), el frontend va detrás de él:
+      # subnets privadas del NLB, SG de los servicios, sin IP pública, target group
+      # c360-frontend y listener TCP 80. El API Gateway del frontend llega a ese
+      # listener por el VPC Link (la integración de GET / y GET /{proxy+} apunta al
+      # listener, no a la tarea). Un servicio existente en otra red se migra.
       # ========================================
       - name: Provisionar recursos de ECS si no existen
         env:
@@ -277,6 +283,10 @@ jobs:
           # Opcionales (Settings > Variables): subnets separadas por coma y SG existente.
           ECS_SUBNETS: ${{ vars.ECS_SUBNETS }}
           ECS_SECURITY_GROUP: ${{ vars.ECS_SECURITY_GROUP }}
+          NLB_NAME: ${{ vars.NLB_NAME || 'camisetas360-nlb' }}
+          TARGET_GROUP_NAME: c360-frontend
+          SERVICES_SG_NAME: ${{ vars.SERVICES_SG_NAME || 'camisetas360-servicios' }}
+          VPCLINK_SG_NAME: ${{ vars.VPCLINK_SG_NAME || 'camisetas360-vpclink' }}
           LOG_GROUP: /ecs/frontend-task
           CONTAINER_PORT: '80'
         run: |
@@ -364,11 +374,98 @@ jobs:
             exit 1
           fi
 
+          # Regla de entrada TCP $CONTAINER_PORT en $1 desde el SG $2; idempotente.
+          permitir() {
+            local out
+            if ! out="$(aws ec2 authorize-security-group-ingress --group-id "$1" \
+                --ip-permissions "IpProtocol=tcp,FromPort=$CONTAINER_PORT,ToPort=$CONTAINER_PORT,UserIdGroupPairs=[{GroupId=$2}]" 2>&1)"; then
+              echo "$out" | grep -q 'InvalidPermission.Duplicate' || { echo "$out"; exit 1; }
+            fi
+          }
+
+          # ---------- Detrás del NLB (si existe) ----------
+          NLB_ARN="$(aws elbv2 describe-load-balancers --names "$NLB_NAME" \
+            --query 'LoadBalancers[0].LoadBalancerArn' --output text 2>/dev/null || echo None)"
+          TG_ARN=""
+
+          if [ -n "$NLB_ARN" ] && [ "$NLB_ARN" != "None" ]; then
+            echo "NLB $NLB_NAME encontrado: el frontend va detrás del NLB, sin IP pública."
+            VPC_ID="$(aws elbv2 describe-load-balancers --load-balancer-arns "$NLB_ARN" \
+              --query 'LoadBalancers[0].VpcId' --output text)"
+            NLB_SG="$(aws elbv2 describe-load-balancers --load-balancer-arns "$NLB_ARN" \
+              --query 'LoadBalancers[0].SecurityGroups[0]' --output text)"
+            SUBNETS="${ECS_SUBNETS:-$(aws elbv2 describe-load-balancers --load-balancer-arns "$NLB_ARN" \
+              --query 'LoadBalancers[0].AvailabilityZones[].SubnetId' --output text | tr '\t' ',')}"
+            SG_ID="${ECS_SECURITY_GROUP:-$(aws ec2 describe-security-groups \
+              --filters Name=vpc-id,Values="$VPC_ID" Name=group-name,Values="$SERVICES_SG_NAME" \
+              --query 'SecurityGroups[0].GroupId' --output text)}"
+            if [ "$SG_ID" = "None" ]; then
+              echo "::error::No existe el security group $SERVICES_SG_NAME en $VPC_ID. Define ECS_SECURITY_GROUP."
+              exit 1
+            fi
+            PUBLIC_IP=DISABLED
+
+            # Target group del frontend (tipo ip, health check HTTP en /health).
+            TG_ARN="$(aws elbv2 describe-target-groups --names "$TARGET_GROUP_NAME" \
+              --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || echo None)"
+            if [ "$TG_ARN" = "None" ]; then
+              echo "Creando target group $TARGET_GROUP_NAME..."
+              TG_ARN="$(aws elbv2 create-target-group --name "$TARGET_GROUP_NAME" \
+                --protocol TCP --port "$CONTAINER_PORT" --target-type ip --vpc-id "$VPC_ID" \
+                --health-check-protocol HTTP --health-check-path /health \
+                --query 'TargetGroups[0].TargetGroupArn' --output text)"
+            fi
+
+            # Listener TCP 80 del NLB -> target group (destino del VPC Link del API Gateway).
+            LISTENER_ARN="$(aws elbv2 describe-listeners --load-balancer-arn "$NLB_ARN" \
+              --query "Listeners[?Port==\`$CONTAINER_PORT\`].ListenerArn | [0]" --output text)"
+            if [ "$LISTENER_ARN" = "None" ]; then
+              echo "Creando listener TCP $CONTAINER_PORT en $NLB_NAME..."
+              aws elbv2 create-listener --load-balancer-arn "$NLB_ARN" --protocol TCP \
+                --port "$CONTAINER_PORT" --default-actions "Type=forward,TargetGroupArn=$TG_ARN" \
+                --no-cli-pager >/dev/null
+            fi
+
+            # VPC Link -> NLB y NLB -> tareas, en el puerto del frontend.
+            if [ "$NLB_SG" != "None" ]; then
+              VPCLINK_SG="$(aws ec2 describe-security-groups \
+                --filters Name=vpc-id,Values="$VPC_ID" Name=group-name,Values="$VPCLINK_SG_NAME" \
+                --query 'SecurityGroups[0].GroupId' --output text)"
+              if [ "$VPCLINK_SG" != "None" ]; then
+                permitir "$NLB_SG" "$VPCLINK_SG"
+              else
+                echo "::warning::No existe el security group $VPCLINK_SG_NAME; el API Gateway no llegará al NLB."
+              fi
+              permitir "$SG_ID" "$NLB_SG"
+            fi
+          fi
+
+          if [ -n "$TG_ARN" ]; then
+            LB_ARGS=(--load-balancers "targetGroupArn=$TG_ARN,containerName=$CONTAINER_NAME,containerPort=$CONTAINER_PORT"
+                     --health-check-grace-period-seconds 60)
+          else
+            LB_ARGS=()
+          fi
+
+          if [ "$SERVICE_STATUS" = "ACTIVE" ] && [ -n "$TG_ARN" ]; then
+            # Servicio creado antes en la VPC por defecto con IP pública: se migra detrás del NLB.
+            CURRENT_TG="$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+              --query 'services[0].loadBalancers[0].targetGroupArn' --output text)"
+            if [ "$CURRENT_TG" != "$TG_ARN" ]; then
+              echo "Migrando $ECS_SERVICE detrás de $NLB_NAME..."
+              aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" \
+                --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG_ID],assignPublicIp=$PUBLIC_IP}" \
+                "${LB_ARGS[@]}" --no-cli-pager >/dev/null
+            fi
+          fi
+
           if [ "$SERVICE_STATUS" != "ACTIVE" ]; then
             echo "El servicio $ECS_SERVICE no existe (estado: $SERVICE_STATUS). Creándolo..."
 
+            if [ -n "$TG_ARN" ]; then
+              :  # Red ya resuelta desde el NLB.
             # Subnets: variable ECS_SUBNETS o las subnets por defecto de la VPC por defecto.
-            if [ -n "${ECS_SUBNETS:-}" ]; then
+            elif [ -n "${ECS_SUBNETS:-}" ]; then
               SUBNETS="$ECS_SUBNETS"
               VPC_ID="$(aws ec2 describe-subnets --subnet-ids "${SUBNETS%%,*}" \
                 --query 'Subnets[0].VpcId' --output text)"
@@ -388,10 +485,15 @@ jobs:
               exit 1
             fi
 
-            # Security group: variable ECS_SECURITY_GROUP o uno propio con HTTP abierto.
-            if [ -n "${ECS_SECURITY_GROUP:-}" ]; then
+            # Security group: el de los servicios (NLB), ECS_SECURITY_GROUP o uno propio
+            # con HTTP abierto (solo sin NLB, con IP pública).
+            if [ -n "$TG_ARN" ]; then
+              :
+            elif [ -n "${ECS_SECURITY_GROUP:-}" ]; then
               SG_ID="$ECS_SECURITY_GROUP"
+              PUBLIC_IP=ENABLED
             else
+              PUBLIC_IP=ENABLED
               SG_NAME="${ECS_SERVICE}-sg"
               SG_ID="$(aws ec2 describe-security-groups \
                 --filters Name=vpc-id,Values="$VPC_ID" Name=group-name,Values="$SG_NAME" \
@@ -413,7 +515,8 @@ jobs:
               --task-definition "$TASK_FAMILY" \
               --desired-count 1 \
               --launch-type FARGATE \
-              --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG_ID],assignPublicIp=ENABLED}" \
+              --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG_ID],assignPublicIp=$PUBLIC_IP}" \
+              "${LB_ARGS[@]}" \
               --deployment-configuration "maximumPercent=200,minimumHealthyPercent=100,deploymentCircuitBreaker={enable=true,rollback=true}" \
               --no-cli-pager >/dev/null
             echo "Servicio $ECS_SERVICE creado."
@@ -573,6 +676,7 @@ jobs:
 
       - name: Verificar el servicio desplegado
         env:
+          FRONTEND_URL: ${{ vars.FRONTEND_URL }}
           TASK_DEFINITION_ARN: ${{ steps.register.outputs.arn }}
           IMAGE_URI: ${{ steps.push.outputs.uri }}
         run: |
@@ -631,7 +735,30 @@ jobs:
             exit 1
           fi
 
-          # Sin ALB, cada tarea tiene su IP pública (cambia en cada deploy).
+          # Detrás del NLB, el frontend se publica por su API Gateway (vars.FRONTEND_URL).
+          if [ -n "${FRONTEND_URL:-}" ]; then
+            URL="${FRONTEND_URL%/}"
+            CODE="$(curl -s -o /dev/null -w '%{http_code}' --retry 5 --retry-all-errors \
+              --retry-delay 5 --max-time 15 "$URL/health" || true)"
+            if [ "$CODE" != "200" ]; then
+              echo "::error::$URL/health respondió $CODE (revisar integración GET /{proxy+}, VPC Link y target group)."
+              exit 1
+            fi
+            echo "Frontend publicado: $URL"
+            {
+              echo "## Camisetas360 Frontend"
+              echo
+              echo "- URL: $URL"
+              echo "- Cluster: $ECS_CLUSTER (Fargate, detrás de NLB)"
+              echo "- Servicio: $ECS_SERVICE"
+              echo "- Imagen: \`$IMAGE_URI\`"
+              echo "- Task definition: \`$TASK_DEFINITION_ARN\`"
+              echo "- Resultado: exitoso"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Sin NLB ni FRONTEND_URL, cada tarea tiene su IP pública (cambia en cada deploy).
           PUBLIC_IP="sin IP pública"
           TASK_ARN="$(aws ecs list-tasks --cluster "$ECS_CLUSTER" --service-name "$ECS_SERVICE" \
             --desired-status RUNNING --query 'taskArns[0]' --output text)"
