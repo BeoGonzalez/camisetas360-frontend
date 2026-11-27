@@ -75,23 +75,27 @@ export async function verificar(token) {
   const [h, c, firma] = partes;
   const header = JSON.parse(b64(h).toString('utf8'));
   const payload = JSON.parse(b64(c).toString('utf8'));
-  if (header.alg !== 'RS256' || !header.kid) return null;
+  if (header.alg !== 'RS256' || !header.kid) return { motivo: 'algoritmo' };
 
   const proveedor = proveedorDe(payload.iss);
-  if (!proveedor) return null;
+  if (!proveedor) return { motivo: 'issuer' };
 
   const pub = await clave(proveedor, header.kid);
-  if (!pub) return null;
+  if (!pub) return { motivo: `kid-${proveedor}` };
   const ok = createVerify('RSA-SHA256').update(`${h}.${c}`).verify(pub, b64(firma));
-  if (!ok) return null;
+  if (!ok) return { motivo: `firma-${proveedor}` };
+  if (!audienciaValida(proveedor, payload)) return { motivo: `audiencia-${proveedor}` };
 
   const ahora = Math.floor(Date.now() / 1000);
   const margen = 60;
-  if (typeof payload.exp !== 'number' || payload.exp + margen < ahora) return null;
-  if (typeof payload.nbf === 'number' && payload.nbf - margen > ahora) return null;
-  if (!audienciaValida(proveedor, payload)) return null;
+  if (typeof payload.exp !== 'number') return { motivo: 'sin-exp' };
+  if (typeof payload.nbf === 'number' && payload.nbf - margen > ahora) return { motivo: 'nbf' };
+  // Vencido pero auténtico (firma, issuer y audiencia propios): pasa. El microservicio lo rechaza
+  // con 401, y ante 401 el frontend renueva o vuelve al login. Si el authorizer lo negara,
+  // API Gateway respondería 403 y el usuario quedaría atascado con una sesión inservible.
+  const vencido = payload.exp + margen < ahora;
 
-  return { proveedor, payload };
+  return { proveedor, payload, vencido };
 }
 
 export async function handler(event) {
@@ -100,7 +104,13 @@ export async function handler(event) {
   if (!token) return { isAuthorized: false };
   try {
     const r = await verificar(token);
-    if (!r) return { isAuthorized: false };
+    if (!r || r.motivo) {
+      // Solo el motivo: nunca el token ni sus claims.
+      console.warn(`authorizer: rechazado (${r?.motivo ?? 'formato'})`);
+      return { isAuthorized: false };
+    }
+    if (r.vencido)
+      console.warn(`authorizer: token ${r.proveedor} vencido, lo rechazará el servicio (401)`);
     const p = r.payload;
     const roles = r.proveedor === 'cognito' ? (p['cognito:groups'] ?? []) : (p.roles ?? []);
     return {
