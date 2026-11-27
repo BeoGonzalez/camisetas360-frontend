@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { MsalService } from '@azure/msal-angular';
 import { catchError, from, switchMap, throwError } from 'rxjs';
 import { environment } from '../../../environments/environment';
-import { aceptaCognito, esUrlDeApi, scopesForUrl } from '../auth/api-scopes';
+import { esUrlDeApi, scopesForUrl } from '../auth/api-scopes';
 import { CognitoAuthService } from '../services/cognito-auth.service';
 
 /** Marca la petición ya reintentada con un token renovado (se reintenta una sola vez). */
@@ -26,9 +26,8 @@ export function resetReauthState(): void {
  *    401: `acquireTokenRedirect` (Entra) o `/auth/login?returnUrl` (Cognito o sin sesión;
  *    la sesión Cognito vía Lambda no tiene renovación).
  *
- * Sesión Cognito: solo se vuelve al login si el token venció o si el 401 viene de un servicio que
- * acepta Cognito (auth, catalog). Un 401 de un servicio solo-Entra (p. ej. recomendaciones) no
- * cierra la sesión: la pantalla muestra el error y el usuario sigue conectado.
+ * Sesión Cognito: todos los servicios (y el authorizer del API Gateway) aceptan sus access tokens,
+ * así que cualquier 401 significa que la sesión ya no sirve: se descarta y se vuelve al login.
  *
  * El error se propaga igualmente para que la pantalla deje su estado de carga.
  */
@@ -62,7 +61,7 @@ export const unauthorizedInterceptor: HttpInterceptorFn = (req, next) => {
 
       const scopes = scopesForUrl(req.url);
       if (cognito.isLoggedIn()) {
-        if (cognito.tokenVencido() || aceptaCognito(req.url)) reautenticar(scopes);
+        reautenticar(scopes);
         return throwError(() => err);
       }
       const account = cognito.isLoggedIn() ? null : msal.instance.getActiveAccount();

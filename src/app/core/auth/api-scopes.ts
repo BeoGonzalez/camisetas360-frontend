@@ -39,23 +39,6 @@ export function rutaDeApi(url: string): string | null {
   return u.pathname.startsWith('/api/v1/') ? u.pathname : null;
 }
 
-/**
- * Prefijos cuyo backend valida access tokens de Cognito (auth y catalog). carrito, orders,
- * notifications, recomendaciones y analytics solo aceptan tokens de Entra ID: su 401 ante una
- * sesión Cognito significa "este servicio no admite Cognito", no "la sesión venció".
- */
-export const ENDPOINTS_CON_COGNITO: ReadonlyArray<EndpointKey> = ['auth', 'catalog'];
-
-/** ¿El servicio de esta URL de {API_BASE} acepta tokens de Cognito? */
-export function aceptaCognito(url: string): boolean {
-  const path = rutaDeApi(url);
-  if (!path) return false;
-  return ENDPOINTS_CON_COGNITO.some((key) => {
-    const prefix = environment.endpoints[key];
-    return path === prefix || path.startsWith(`${prefix}/`);
-  });
-}
-
 /** ¿Va dirigida la petición a la API propia? (solo entonces se adjuntan credenciales) */
 export function esUrlDeApi(url: string): boolean {
   return rutaDeApi(url) !== null;
